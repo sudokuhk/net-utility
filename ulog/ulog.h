@@ -22,4 +22,6 @@ typedef void (*ulog_t)(int, const char *, va_list);
 
 void setulog(ulog_t log);
 
+int  getlevelbystring(const char * str);
+
 #endif

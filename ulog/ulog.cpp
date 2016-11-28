@@ -1,4 +1,5 @@
 #include "ulog.h"
+#include <string.h>
 
 static void default_log(int, const char *, va_list)
 {
@@ -19,3 +20,33 @@ void setulog(ulog_t log)
     glog = log;
 }
 
+int  getlevelbystring(const char * str) 
+{
+    static const char * level_str[] =
+    {
+        "emrge",
+        "alert",
+        "crit",
+        "error",
+        "warn",
+        "notice",
+        "info",
+        "debug",
+        NULL,
+    };
+
+    const static int default_level = ulog_error;
+    int level = default_level;
+
+    if (str == NULL) {
+        int idx = 0;
+        while (level_str[idx] != NULL) {
+            if (strcmp(str, level_str[idx]) == 0) {
+                level = idx;
+                break;
+            }
+        }
+    }
+
+    return level;
+}
