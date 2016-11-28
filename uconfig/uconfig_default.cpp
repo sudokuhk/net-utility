@@ -70,13 +70,16 @@ bool uconfig_default::load(const char * filename)
             }
             
             std::streamsize rdn = in.gcount();
-            if (*rbuf == '#') {
-                continue;
-            }
 
             rbuf[rdn] = '\0';
             char * begin = rbuf;
             char * end   = rbuf + rdn;
+
+            char * anno = strstr(begin, (const char *)"#");
+            if (anno != NULL) {
+                *anno -- = '\0';
+                end = anno;
+            }
 
             skip_blank(begin, end);
 
@@ -92,8 +95,8 @@ bool uconfig_default::load(const char * filename)
 
                 skip_blank(begin, end);
                 if (begin > end) {
-                    fprintf(stderr, "empty group name. (%s:%d)\n", 
-                        filename, linenum);
+                    fprintf(stderr, "empty group name. (%s:%d:%ld)\n", 
+                        filename, linenum, begin - rbuf);
                     goto out;
                 }
 
@@ -104,8 +107,8 @@ bool uconfig_default::load(const char * filename)
             } else if (pgroup != NULL) {
                 char * sep = strstr(begin, (const char *)"=");
                 if (sep == NULL) {
-                    fprintf(stderr, "no seperate(=)! (%s:%d)(%s)\n",
-                        filename, linenum, begin);
+                    fprintf(stderr, "no seperate(=)! (%s:%d:%ld)\n",
+                        filename, linenum, begin - rbuf);
                     goto out;
                 }
 
@@ -117,16 +120,16 @@ bool uconfig_default::load(const char * filename)
                 skip_blank(valueb, end);
 
                 if (begin > keye) {
-                    fprintf(stderr, "empty key! (%s:%d)(=%s)\n",
-                        filename, linenum, valueb);
+                    fprintf(stderr, "empty key! (%s:%d:%ld)(=%s)\n",
+                        filename, linenum, begin - rbuf, valueb);
                     goto out;
                 }
 
                 (*pgroup)[begin] = valueb;
                 //printf("group:%s=%s\n", begin, valueb);
             } else {
-                fprintf(stderr, "invalid group item! (%s:%d)\n",
-                    filename, linenum);
+                fprintf(stderr, "invalid group item! (%s:%d:%d)\n",
+                    filename, linenum, 0);
                 goto out;
             }            
             
