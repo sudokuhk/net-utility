@@ -20,33 +20,46 @@ void setulog(ulog_t log)
     glog = log;
 }
 
+static const char * level_str[] =
+{
+    "emrge",
+    "alert",
+    "crit",
+    "error",
+    "warn",
+    "notice",
+    "info",
+    "debug",
+    NULL,
+};
+
+
 int  getlevelbystring(const char * str) 
 {
-    static const char * level_str[] =
-    {
-        "emrge",
-        "alert",
-        "crit",
-        "error",
-        "warn",
-        "notice",
-        "info",
-        "debug",
-        NULL,
-    };
-
     const static int default_level = ulog_error;
     int level = default_level;
 
-    if (str == NULL) {
+    if (str != NULL) {
         int idx = 0;
         while (level_str[idx] != NULL) {
-            if (strcmp(str, level_str[idx]) == 0) {
+            if (strcasecmp(str, level_str[idx]) == 0) {
                 level = idx;
                 break;
             }
+            idx ++;
         }
     }
 
     return level;
+}
+
+const char * getstringbylevel(int level)
+{
+    const char * str = NULL;
+
+    if (level >= ulog_emrge && level <= ulog_debug) {
+        str = level_str[level];
+    }
+
+    return str;
 }

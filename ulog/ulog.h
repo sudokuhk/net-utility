@@ -24,4 +24,6 @@ void setulog(ulog_t log);
 
 int  getlevelbystring(const char * str);
 
+const char * getstringbylevel(int level);
+
 #endif
