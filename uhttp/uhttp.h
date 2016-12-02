@@ -5,6 +5,7 @@
 #include "uhttpmessage.h"
 #include "uhttprequest.h"
 #include "uhttpresponse.h"
+#include "uboundaryparser.h"
 
 #include <iostream>
 

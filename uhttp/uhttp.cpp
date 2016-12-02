@@ -317,7 +317,7 @@ bool uhttp::recv_start(std::string & first, std::string & second,
         *end -- = '\0';
     }
 
-    //printf("start:%s\n", line_); 
+    printf("start:%s\n", line_); 
     
     // format:  METHOD URI VERSION (CRLF)
     char * method;

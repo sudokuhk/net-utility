@@ -14,6 +14,7 @@ const char * uhttpmessage::HEADER_TRANSFER_ENCODING = "Transfer-Encoding";
 const char * uhttpmessage::HEADER_DATE              = "Date";
 const char * uhttpmessage::HEADER_SERVER            = "Server";
 const char * uhttpmessage::HEADER_KEEPALIVE         = "Keep-Alive";
+const char * uhttpmessage::HEADER_XFF               = "X-Forwarded-For";
 
 uhttpmessage::uhttpmessage(int type)
     : type_(type)

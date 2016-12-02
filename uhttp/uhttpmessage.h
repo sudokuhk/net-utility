@@ -23,6 +23,7 @@ public:
     static const char * HEADER_DATE;
     static const char * HEADER_SERVER;
     static const char * HEADER_KEEPALIVE;
+    static const char * HEADER_XFF;
     
 public:
     uhttpmessage(int type);
