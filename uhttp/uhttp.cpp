@@ -557,7 +557,7 @@ bool uhttp::recv_body(uhttpmessage & msg)
             dstream.opaque     = NULL; 
     
             if (inflateInit2(&dstream, MAX_WBITS + 16) != Z_OK) {
-                printf("inflate init failed!\n");
+                //printf("inflate init failed!\n");
                 gzip = false;
             }
 
@@ -644,8 +644,8 @@ bool uhttp::compress(std::string & content, int type)
 
     if (deflateInit2(&cstream, Z_DEFAULT_COMPRESSION, 
         Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
-        printf("deflateInit2 failed, %s\n", 
-            cstream.msg == NULL ? "NONE" : cstream.msg);
+        //printf("deflateInit2 failed, %s\n", 
+        //    cstream.msg == NULL ? "NONE" : cstream.msg);
         return false;
     }
 
