@@ -45,6 +45,7 @@ public:
 
     bool keep_alive() const;
 
+    void append_content(const std::string & content);
     void append_content(const char * content, int length);
     void set_content(const char * content, int length);
     void set_content(const char * content);

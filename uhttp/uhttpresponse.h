@@ -15,6 +15,8 @@ public:
 
     const int statuscode() const;
 
+    const char * reasonphrase() const;
+
     virtual void clear();
 private:
     int statuscode_;

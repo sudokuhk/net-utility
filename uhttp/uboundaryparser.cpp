@@ -60,63 +60,53 @@ bool uboundaryparser::parse(const std::string & content, const char * boundary,
         // 1. find CONTENT_DISPOSITION
         begin = begin;
         pos = content.find(CONTENT_DISPOSITION, begin);
-        if (pos == std::string::npos) {
-            break;
+        if (pos != std::string::npos) {
+            begin = pos + sizeof(CONTENT_DISPOSITION) - 1;
+            pos = content.find(';', begin);
+            if (pos != std::string::npos) {
+                data    = content.data() + begin;
+                len     = pos - begin;
+                while (*data == ' ') {
+                    data ++;
+                    len --;
+                }
+                std::string(data, len).swap(info.disposition);
+            }
         }
-
-        begin = pos + sizeof(CONTENT_DISPOSITION) - 1;
-        pos = content.find(';', begin);
-        if (pos == std::string::npos) {
-            break;
-        }
-
-        data    = content.data() + begin;
-        len     = pos - begin;
-        while (*data == ' ') {
-            data ++;
-            len --;
-        }
-        std::string(data, len).swap(info.disposition);
 
         // 2. find NAME
         begin   = pos + 1;
         pos = content.find(NAME, begin);
-        if (pos == std::string::npos) {
-            break;
+        if (pos != std::string::npos) {
+            begin = pos + sizeof(NAME);
+            pos = content.find('"', begin);
+            if (pos != std::string::npos) {
+                data    = content.data() + begin;
+                len     = pos - begin;
+                while (len > 0 && (*data == ' ' || *data == '"')) {
+                    data ++;
+                    len --;
+                }
+                std::string(data, len).swap(info.name);
+            }
         }
-        begin = pos + sizeof(NAME);
-        pos = content.find('"', begin);
-        if (pos == std::string::npos) {
-            break;
-        }
-        
-        data    = content.data() + begin;
-        len     = pos - begin;
-        while (len > 0 && (*data == ' ' || *data == '"')) {
-            data ++;
-            len --;
-        }
-        std::string(data, len).swap(info.name);
 
         // 3. find FILENAME
         begin   = pos + 1;
         pos = content.find(FILENAME, begin);
-        if (pos == std::string::npos) {
-            break;
+        if (pos != std::string::npos) {
+            begin = pos + sizeof(FILENAME);
+            pos = content.find('"', begin);
+            if (pos != std::string::npos) {
+                data    = content.data() + begin;
+                len     = pos - begin;
+                while (len > 0 && (*data == ' ' || *data == '"')) {
+                    data ++;
+                    len --;
+                }
+                std::string(data, len).swap(info.filename);
+            }
         }
-        begin = pos + sizeof(FILENAME);
-        pos = content.find('"', begin);
-        if (pos == std::string::npos) {
-            break;
-        }
-        
-        data    = content.data() + begin;
-        len     = pos - begin;
-        while (len > 0 && (*data == ' ' || *data == '"')) {
-            data ++;
-            len --;
-        }
-        std::string(data, len).swap(info.filename);
 
         // 3. find CONTENT_TYPE
         begin   = pos + 1;

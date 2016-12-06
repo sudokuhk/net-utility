@@ -251,6 +251,8 @@ bool uhttp::send_response(uhttpresponse & response)
             << UHTTP_LINE_END;
 
     std::string & content = response.content();
+    response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    
     if (gzip_ && compress(content)) {
         response.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
         response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
@@ -317,7 +319,7 @@ bool uhttp::recv_start(std::string & first, std::string & second,
         *end -- = '\0';
     }
 
-    printf("start:%s\n", line_); 
+    //printf("start:%s\n", line_); 
     
     // format:  METHOD URI VERSION (CRLF)
     char * method;

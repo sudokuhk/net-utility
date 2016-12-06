@@ -141,6 +141,12 @@ bool uhttpmessage::keep_alive() const
     return ret;
 }
 
+void uhttpmessage::append_content(const std::string & content)
+{
+    content_.append(content);
+    set_header(HEADER_CONTENT_LENGTH, content_.size());
+}
+
 void uhttpmessage::append_content(const char * content, int length)
 {
     if (content == NULL || length == 0) {

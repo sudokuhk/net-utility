@@ -8,6 +8,9 @@
 class uuri
 {
 public:
+    typedef std::map<std::string, std::string> query_map;
+    
+public:
     uuri();
 
     uuri(const char * uri);

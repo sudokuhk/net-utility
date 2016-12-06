@@ -1,5 +1,6 @@
 #include "uhttpresponse.h"
 #include "uhttpdefs.h"
+#include "uhttp.h"
 
 uhttpresponse::uhttpresponse()
     : uhttpmessage(en_response)
@@ -19,6 +20,11 @@ void uhttpresponse::set_statuscode(int statuscode)
 const int uhttpresponse::statuscode() const
 {
     return statuscode_;
+}
+
+const char * uhttpresponse::reasonphrase() const
+{
+    return uhttp::get_reasonphrase(statuscode_);
 }
 
 void uhttpresponse::clear()
