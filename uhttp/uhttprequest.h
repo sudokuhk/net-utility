@@ -16,6 +16,8 @@ public:
 
     const int method() const;
 
+    const char * methodname() const;
+
     void set_uri(const char * uri);
 
     void set_uri(const uuri & uri);

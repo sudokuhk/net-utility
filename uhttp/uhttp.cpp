@@ -728,6 +728,14 @@ const char * uhttp::get_version(int version)
     return sversions[version];
 }
 
+const char * uhttp::get_methodname(int method)
+{
+    if (method < uhttp_method_get || method >= uhttp_method_unknown) {
+        return NULL;
+    }
+    return smethods[method];
+}
+
 void uhttp::set_max_content_limit(size_t limit)
 {
     max_content_limit_ = limit;

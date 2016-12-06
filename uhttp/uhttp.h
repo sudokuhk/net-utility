@@ -25,6 +25,7 @@ public:
     static const char * get_reasonphrase(int statuscode) ;
     static const char * get_version(int version);
     static void set_max_content_limit(size_t limit);
+    static const char * get_methodname(int method);
     
 public:
     uhttp(std::iostream & stream, uhttphandler & handler, bool gzip = true);

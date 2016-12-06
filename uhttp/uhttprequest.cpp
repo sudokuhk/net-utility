@@ -1,5 +1,6 @@
 #include "uhttprequest.h"
 #include "uhttpdefs.h"
+#include "uhttp.h"
 
 uhttprequest::uhttprequest()
     : uhttpmessage(en_request)
@@ -20,6 +21,11 @@ void uhttprequest::set_method(int method)
 const int uhttprequest::method() const
 {
     return method_;
+}
+
+const char * uhttprequest::methodname() const
+{
+    return uhttp::get_methodname(method_);
 }
 
 void uhttprequest::set_uri(const char * uri)
