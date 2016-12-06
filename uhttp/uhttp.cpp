@@ -176,6 +176,7 @@ void uhttp::run()
             time_t t_time = time(NULL);
             struct tm tm_time;
             gmtime_r(&t_time, &tm_time);
+            //localtime_r(&t_time, &tm_time);
             strftime(buffer, sizeof(buffer), 
                 "%a, %d %b %Y %H:%M:%S %Z", &tm_time);
             response.set_header(uhttpresponse::HEADER_DATE, buffer);
