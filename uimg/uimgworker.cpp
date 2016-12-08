@@ -30,7 +30,7 @@ uimgworker::uimgworker(umonitor & monitor, const uimg_conf & config,
     : monitor_(monitor)
     , config_(config)
     , schudule_(schudule)
-    , socket_(1024, fd, &schudule_)
+    , socket_(4096, fd, &schudule_)
     , http_(socket_, *this, false)
     , md5_()
     , io_(config_.server_datapath)
@@ -84,13 +84,17 @@ int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
     } else {
         clientip = peerip_;
     }
+
+    ulog(ulog_debug, "[%s] [%s %s] proxy[%s]\n", 
+        clientip.c_str(), path.c_str(), request.methodname(),
+        has_proxy ? proxyips.c_str() : "");
     
     const uimgworker::handler_type * h;
     int ret = 0;
     
     for (h = handlers; h->cmd != NULL; h ++) {
         if (strcmp(h->cmd, path.c_str()) == 0) {
-            //ulog(ulog_debug, "find handler for path:%s!\n", h->cmd);
+            ulog(ulog_debug, "find handler for path:%s!\n", h->cmd);
             break;
         }
     }
@@ -176,6 +180,7 @@ int uimgworker::index(const uhttprequest & request, uhttpresponse & response)
             ulog(ulog_error, "not enough, need:%ld, read:%ld!\n", sb.st_size, rdn);
             ret = notfind(request, response);
         } else {
+            response.set_statuscode(uhttp_status_ok);
             response.content().swap(content);
             response.set_header(uhttpresponse::HEADER_CONTENT_TYPE, "text/html");
         }
@@ -238,7 +243,7 @@ int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
                         md5_.update(info[i].data, info[i].len);
                         std::string md5 = md5_.toString();
                         
-                        printf("md5:%s\n", md5.c_str());
+                        //printf("md5:%s\n", md5.c_str());
                         if (io_.save(md5, info[i].data, info[i].len) == 0) {
                             suc = true;
                             response.append_content("<h1>MD5: ");
@@ -257,6 +262,21 @@ int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
                 }
             } else { //binary.
                 binary = true;
+                const std::string & data = request.content();
+
+                ulog(ulog_debug, "upload, binary. size:%ld!\n", data.size());
+
+                md5_.reset();
+                md5_.update(data.data(), data.size());
+                std::string md5 = md5_.toString();
+                ulog(ulog_debug, "calc md5:%s\n", md5.c_str());
+
+                int result = io_.save(md5, data.data(), data.size());
+                if (result == 0) {
+                    suc = true;
+                }
+                
+                ulog(ulog_debug, "save result:%d\n", result);
             }
         } while (0);
     }
@@ -307,6 +327,8 @@ int uimgworker::download(const uhttprequest & request, uhttpresponse & response)
         } else {
             response.set_statuscode(uhttp_status_ok);
         }
+    } else {
+        ret = notfind(request, response);
     }
     
     return ret;

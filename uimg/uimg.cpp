@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <strings.h>
+#include <sys/time.h>
 
 #include <ulog/ulog.h>
 #include <utools/ufs.h>
@@ -201,15 +202,19 @@ void uimg_server::log(int level, const char * fmt, va_list valist)
         }
     }
     
+    struct timeval tv;
+    gettimeofday(&tv , NULL);
+    
     struct tm tm_time;
     localtime_r(&t_time, &tm_time);
     //gmtime_r(&t_time, &tm_time);
     //tm_time.tm_hour += 8; // GMT -> CCT
     
-    off = strftime(log_buf_, log_buf_size_, "%Y-%m-%d %H:%M:%S ", &tm_time); 
+    off = strftime(log_buf_, log_buf_size_, "%Y-%m-%d %H:%M:%S", 
+        &tm_time); 
     
-    off += snprintf(log_buf_ + off, log_buf_size_ - off, "[%s] ", 
-        getstringbylevel(level));
+    off += snprintf(log_buf_ + off, log_buf_size_ - off, ":%.6d [%s] ", 
+        (int)tv.tv_usec, getstringbylevel(level));
         
     off += vsnprintf(log_buf_ + off, log_buf_size_ - off, fmt, valist);
 

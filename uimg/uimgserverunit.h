@@ -19,6 +19,18 @@ class uimgserverunit
 public:
     static void * threadf(void * args);
 
+private:
+    class uimglock : public ulock
+    {
+    public:
+        uimglock()              {   pthread_mutex_init(&mutex_, NULL);  }
+        virtual ~uimglock()     {   pthread_mutex_destroy(&mutex_);     }
+        virtual void lock()     {   pthread_mutex_lock(&mutex_);        }
+        virtual void unlock()   {   pthread_mutex_unlock(&mutex_);      }
+    private:
+        pthread_mutex_t mutex_;
+    };
+    
 public:
     uimgserverunit(const uimg_conf & config);
 

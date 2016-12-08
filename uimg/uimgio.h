@@ -12,8 +12,8 @@
 #include <map>
 
 #define     MD5_LEN             32
-#define     DEFAULT_PATHSIZE    3
-#define     DEFAULT_PATH_DEPTH  3
+#define     DEFAULT_PATHSIZE    4
+#define     DEFAULT_PATH_DEPTH  2
 
 class uimgio
 {
@@ -33,6 +33,7 @@ private:
     std::string getpath(const std::string & md5);
 
     int write(const std::string & fname, const char * data, size_t len);
+    
     int read(const std::string & fname, std::string & buf);
 private:
     std::string rootpath_;
