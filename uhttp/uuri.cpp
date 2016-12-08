@@ -124,7 +124,10 @@ std::string uuri::conbine() const
     
     uri.reserve(1024);
     
-    if (path_.empty()) {
+    if (!path_.empty()) {
+        if (path_[0] != '/') {
+            uri.append(("/"));
+        }
         uri.append(path_);
     } else {
         uri.append("/");
@@ -144,7 +147,7 @@ std::string uuri::conbine() const
         }
 
         //uri_.pop_back();
-        uri.erase(uri_.size() - 1);
+        uri.erase(uri.size() - 1);
     }
 
     if (!fragment_.empty()) {

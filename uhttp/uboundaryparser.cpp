@@ -29,7 +29,6 @@ bool uboundaryparser::parse(const std::string & content, const char * boundary,
 
     std::string::size_type begin   = 0;
     std::string::size_type pos     = 0;
-    std::string::size_type idx     = 0;
     const char * data = NULL;
     std::string::size_type len     = 0;
     bool first                     = true;

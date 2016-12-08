@@ -202,9 +202,11 @@ bool uhttp::send_request(uhttprequest & request)
     stream_ << smethods[request.method()] << " " 
             << request.uri().get() << " "
             << sversions[request.version()]
-            << UHTTP_LINE_END;
+            << UHTTP_LINE_END; 
 
     std::string & content = request.content();
+    request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    
     if (gzip_ && compress(content)) {
         request.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
         request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
@@ -540,7 +542,15 @@ bool uhttp::recv_body(uhttpmessage & msg)
         }
     }
 
-    if (good && gzip_ && msg.content().size() > 0) {
+    const char * content_type = 
+        msg.get_header(uhttpmessage::HEADER_CONTENT_ENCODING);
+    bool gzip = false;
+    
+    if (content_type != NULL) {
+        gzip = strstr(content_type, "gzip") != NULL;
+    }
+    
+    if (good && (gzip) && msg.content().size() > 0) {
         std::string content;
         
         const char * dataencoding 

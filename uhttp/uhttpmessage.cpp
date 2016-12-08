@@ -170,6 +170,12 @@ void uhttpmessage::set_content(const char * content)
     }
 }
 
+void uhttpmessage::set_content(const std::string & content)
+{
+    set_content(content.c_str(), content.size());
+}
+
+
 const std::string & uhttpmessage::content() const
 {
     return content_;

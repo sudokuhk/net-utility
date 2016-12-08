@@ -49,6 +49,7 @@ public:
     void append_content(const char * content, int length);
     void set_content(const char * content, int length);
     void set_content(const char * content);
+    void set_content(const std::string & content);
     const std::string & content() const;
     std::string & content();
 
