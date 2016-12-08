@@ -37,8 +37,8 @@ private:
 	void update(const byte *input, size_t length);
 	void final();
 	void transform(const byte block[64]);
-	void encode(const uint32 *input, byte *output, size_t length);
-	void decode(const byte *input, uint32 *output, size_t length);
+	inline void encode(const uint32 *input, byte *output, size_t length);
+	inline void decode(const byte *input, uint32 *output, size_t length);
 	std::string bytesToHexString(const byte *input, size_t length);
 
 	/* class uncopyable */
