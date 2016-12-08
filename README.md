@@ -31,3 +31,17 @@
 
 其中，unetwork、ustream、uthread是参照腾讯开源的phxrpc，使用C++代码实现的相互独立的模块。
 phxrpc仓库：https://github.com/tencent-wechat/phxrpc
+
+[uimg]
+--编译
+1. 进入uimg目录
+2. 执行make
+3. ./uimg -f default.conf，默认监听端口8783.
+
+--使用
+[浏览器]
+1. 打开浏览器，输入ip:8783访问index,上传图片
+2. 打开ip:8783/download?md5=xxxx 可以下载md5对应的图片
+
+[二进制上传]
+1. ip:8783/upload，post方式
