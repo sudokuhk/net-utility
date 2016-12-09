@@ -70,6 +70,14 @@ void uhttpmessage::set_header(const char * name, int value)
     set_header(name, buf);
 }
 
+void uhttpmessage::set_header(const std::string & name, const std::string & value)
+{
+    if (name.empty() || value.empty()) {
+        return;
+    }
+    header_[name] = value;
+}
+
 bool uhttpmessage::remove_header(const char * name)
 {
     bool ret = false;

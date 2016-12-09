@@ -36,6 +36,7 @@ public:
     int type() const;
     size_t header_count() const;
 
+    void set_header(const std::string & name, const std::string & value);
     void set_header(const char * name, const char * value);
     void set_header(const char * name, int value);
     bool remove_header(const char * name);

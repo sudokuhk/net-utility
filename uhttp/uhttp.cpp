@@ -2,6 +2,7 @@
 #include "uhttpmessage.h"
 #include "uhttprequest.h"
 #include "uhttpresponse.h"
+#include <ulog/ulog.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,37 +108,28 @@ const static struct sreasonphrase_t
 uhttp::uhttp(std::iostream & stream, uhttphandler & handler, bool gzip)
     : stream_(stream)
     , handler_(handler)
-    , line_(NULL)
     , linesize_(HTTP_RECV_MAXSIZE)
-    , compress_buf_size_(HTTP_RECV_MAXSIZE * 2)
-    , compress_buf_(NULL)
-    , decompress_buf_size_(HTTP_RECV_MAXSIZE)
-    , decompress_buf_(NULL)
+    , line_((char *)malloc(linesize_))
     , gzip_(gzip)
+    , compress_buf_size_(HTTP_RECV_MAXSIZE * 2)
+    , compress_buf_(gzip_ ? (char *)malloc(compress_buf_size_) : NULL)
+    , decompress_buf_size_(HTTP_RECV_MAXSIZE)
+    , decompress_buf_((char *)malloc(decompress_buf_size_))
 {
-    line_           = (char *)malloc(linesize_);
-
-    if (gzip_) {
-        compress_buf_   = (char *)malloc(compress_buf_size_);
-        decompress_buf_ = (char *)malloc(decompress_buf_size_);
-    }
 }
 
 uhttp::~uhttp()
 {
     if (line_ != NULL) {
         free(line_);
-        line_ = NULL;
     }
 
     if (compress_buf_ != NULL) {
         free(compress_buf_);
-        compress_buf_ = NULL;
     }
 
     if (decompress_buf_ != NULL) {
         free(decompress_buf_);
-        decompress_buf_ = NULL;
     }
 }
 
@@ -149,44 +141,62 @@ void uhttp::run()
     uhttprequest & request = *prequest;
     uhttpresponse & response = *presponse;
     
-    bool good = false;
-    bool alive = true;
+    int result      = en_succeed;
+    bool alive      = true;
+    int handler_res = 0;
 
     while (alive) {
         
-        good = recv_request(request);
-        if (!good) {
+        result = recv_request(request);
+        
+        if (result == en_succeed) {
+            alive = request.keep_alive();
+            //request.output_header(std::cout);
+
+            handler_res = handler_.onhttp(request, response);
+
+            if (request.version() == uhttp_version_1_0 ||
+                response.version() == uhttp_version_1_0 ||
+                !request.keep_alive() || 
+                !response.keep_alive()) { //  ||
+                //response.statuscode() != uhttp_status_ok) {
+                response.set_header(uhttpresponse::HEADER_CONNECTION, "close");
+            }
+
+            if (response.get_header(uhttpmessage::HEADER_DATE) == NULL) {
+                char buffer[256] = { 0 };
+                time_t t_time = time(NULL);
+                struct tm tm_time;
+                gmtime_r(&t_time, &tm_time);
+                //localtime_r(&t_time, &tm_time);
+                strftime(buffer, sizeof(buffer), 
+                    "%a, %d %b %Y %H:%M:%S %Z", &tm_time);
+                response.set_header(uhttpresponse::HEADER_DATE, buffer);
+            }
+            if (response.get_header(uhttpmessage::HEADER_SERVER) == NULL) {
+                response.set_header(uhttpresponse::HEADER_SERVER, "http/uhttp");
+            }
+        } else {
+        
+            if (!stream_.good()) {
+                result = en_socket_reset;
+            }
+            
+            handler_res =  handler_.onerror(result, response);
+            
+            if (response.statuscode() != 0 && stream_.good()) {
+                send_response(response);
+            } 
             break;
         }
-        alive = request.keep_alive();
-        //request.output_header(std::cout);
-
-        int res = handler_.onhttp(request, response);
-
-        if (request.version() == uhttp_version_1_0 ||
-            response.version() == uhttp_version_1_0 ||
-            !request.keep_alive() || 
-            !response.keep_alive() ||
-            response.statuscode() != uhttp_status_ok) {
-            response.set_header(uhttpresponse::HEADER_CONNECTION, "close");
-        }
-
-        if (response.get_header(uhttpmessage::HEADER_DATE) == NULL) {
-            char buffer[256] = { 0 };
-            time_t t_time = time(NULL);
-            struct tm tm_time;
-            gmtime_r(&t_time, &tm_time);
-            //localtime_r(&t_time, &tm_time);
-            strftime(buffer, sizeof(buffer), 
-                "%a, %d %b %Y %H:%M:%S %Z", &tm_time);
-            response.set_header(uhttpresponse::HEADER_DATE, buffer);
-        }
-        if (response.get_header(uhttpmessage::HEADER_SERVER) == NULL) {
-            response.set_header(uhttpresponse::HEADER_SERVER, "http/uhttp");
-        }
         
-        good = send_response(response);
-        if (!good || res != 0) { // || response.statuscode() != uhttp_status_ok) {
+        result = send_response(response);
+        if (result != en_succeed || handler_res != 0) {
+            if (!stream_.good()) {
+                result = en_socket_reset;
+            }
+            
+            handler_.onerror(result, response);
             break;
         }
     }
@@ -197,109 +207,171 @@ void uhttp::run()
     return;
 }
 
-bool uhttp::send_request(uhttprequest & request)
+int uhttp::send_request(uhttprequest & request)
 {
+    std::string & content = request.content();
+    request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    
+    if (gzip_) {
+        if (!compress(content)) {
+            return en_send_req_comp_error;
+        }
+        request.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
+        request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    }
+    
     stream_ << smethods[request.method()] << " " 
             << request.uri().get() << " "
             << sversions[request.version()]
             << UHTTP_LINE_END; 
 
-    std::string & content = request.content();
-    request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
-    
-    if (gzip_ && compress(content)) {
-        request.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
-        request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    if (!stream_.flush().good()) {
+        return en_send_req_start_error;
     }
     
     request.output_header(stream_);
     stream_ << UHTTP_LINE_END;
 
+    if (!stream_.flush().good()) {
+        return en_send_req_header_error;
+    }
+    
     if (!content.empty()) {
         stream_.write(content.data(), content.size());
     }
 
-    if (stream_.flush().good()) {
-        return true;
+    if (!stream_.flush().good()) {
+        return en_send_req_body_error;
     }
     
-    return false;
+    return en_succeed;
 }
 
-bool uhttp::recv_request(uhttprequest & request)
+int uhttp::recv_request(uhttprequest & request)
 {
     if (!recv_start(request)) {
         //printf("recv recv_start failed!\n");
-        return false;
+        return en_recv_req_start_error;
     }
     
     if (!recv_header(request)) {
         //printf("recv recv_header failed!\n");
-        return false;
+        return en_recv_req_header_error;
     }
 
-    if (!recv_body(request)) {
-        //printf("recv recv_body failed!\n");
-        return false;
-    }
-
-    return true;
+    return recv_body(request);
 }
 
-bool uhttp::send_response(uhttpresponse & response)
+int uhttp::send_response(uhttpresponse & response)
 {
+    std::string & content = response.content();
+    response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    
+    if (gzip_) {
+        if (!compress(content)) {
+            return en_send_res_comp_error;
+        }
+        response.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
+        response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    } 
+    
     stream_ << sversions[response.version()] << " " 
             << response.statuscode() << " "
             << get_reasonphrase(response.statuscode())
             << UHTTP_LINE_END;
 
-    std::string & content = response.content();
-    response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
-    
-    if (gzip_ && compress(content)) {
-        response.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
-        response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
+    if (!stream_.flush().good()) {
+        return en_send_res_start_error;
     }
 
     //response.output_header(std::cout);
     response.output_header(stream_);
     stream_ << UHTTP_LINE_END;
 
-    //const std::string & content = response.content();
+    if (!stream_.flush().good()) {
+        return en_send_req_header_error;
+    }
+
     if (!content.empty()) {
         stream_.write(content.data(), content.size());
     }
 
-    if (stream_.flush().good()) {
-        return true;
+    if (!stream_.flush().good()) {
+        return en_send_req_body_error;
     }
     
-    return false;
+    return en_succeed;
 }
 
-bool uhttp::recv_response(uhttpresponse & response)
+int uhttp::recv_response(uhttpresponse & response)
 {
     if (!recv_start(response)) {
-        return false;
+        return en_recv_res_start_error;
     }
 
     if (!recv_header(response)) {
-        return false;
+        return en_recv_res_header_error;
     }
 
-    if (!recv_body(response)) {
-        return false;
-    }
-
-    return true;
+    return recv_body(response);
 }
 
-bool uhttp::istrim(char c)
+bool uhttp::iswhitespace(char c)
 {
     if (c == ' ' || c == '\0' || c == '\n' || c == '\r') {
         return true;
     }
     return false;
+}
+
+void uhttp::trimleft(char * & left, char * & right)
+{
+    while (left <= right && iswhitespace(*left))    left ++;
+}
+
+void uhttp::trimright(char * & left, char * & right)
+{
+    while (left <= right && iswhitespace(*right))   right --;
+}
+
+void uhttp::trim(char * & left, char * & right)
+{
+    //private function, assume left & right never be NULL.
+    trimleft(left, right);
+    trimright(left, right);
+}
+
+void uhttp::set(char * const p, char v)
+{
+    *p = v;
+}
+
+/*
+ * split str by sep. skip left whitespace.
+ * [a1, a2] represent the get one.
+ * return next begin.
+ */
+char* uhttp::get(char *begin, char *end, char sep, char *& a1, char *&a2)
+{
+    char * pb = begin;
+    char * pe = end;
+    
+    trimleft(pb, pe);
+    if (pb > pe) {
+        return NULL;
+    }
+
+    char * ps = strchr(pb, sep);
+    if (ps == NULL) {
+        return NULL;
+    }
+
+    a1 = pb;
+    a2 = ps - 1;
+
+    trimright(a1, a2);
+
+    return ps + 1;
 }
 
 bool uhttp::recv_start(std::string & first, std::string & second, 
@@ -309,55 +381,45 @@ bool uhttp::recv_start(std::string & first, std::string & second,
         return false;
     }
 
-    if (stringsplit) {
-        //std::string line(line_, stream_.gcount() - 2);
-
-        //int begin = 0;
-        //int pos = line.find(begin, ' ');
-        return true;
+    std::streamsize rdn = stream_.gcount();
+    if (rdn >= HTTP_RECV_MAXSIZE) {
+        ulog(ulog_error, "uhttp:recv_start max size:%ld\n", rdn);
+        return false;
     }
     
-    char * end = line_ + stream_.gcount() - 1;
-    while ((end != line_) && istrim(*end)) {
-        *end -- = '\0';
-    }
+    char * begin    = line_;
+    char * end      = line_ + rdn - 1;
 
-    //printf("start:%s\n", line_); 
+    trimright(begin, end);
+    if (begin > end) {
+        return false;
+    }
+    set(end + 1, '\0');
+    ulog(ulog_debug, "uhttp:recv_start:%s\n", begin);
     
     // format:  METHOD URI VERSION (CRLF)
-    char * method;
-    char * uri;
-    char * version;
-    
-    // get method
-    method = line_;
-    while (method < end && istrim(*method)) method ++;   //trim
-    //printf("method:%s\n", method);
+    char * pb;
+    char * pe;
+    char * next;
 
-    // find first whitespace.
-    uri = method + 1;
-    while (uri < end && *uri != ' ') uri ++;
-    *uri = '\0';
+    // get method
+    next = get(begin, end, ' ', pb, pe);
+    if (next == NULL) {
+        return false;
+    }
+    std::string(pb, pe - pb + 1).swap(first);
 
     // get uri.
-    uri ++;
-    while (uri < end && istrim(*uri)) uri ++;   //trim
-    //printf("uri:%s\n", uri);
+    next = get(next, end, ' ', pb, pe);
+    if (next == NULL) {
+        return false;
+    }
+    std::string(pb, pe - pb + 1).swap(second);
 
-    // find second whitespace.
-    version = uri + 1;
-    while (version < end && *version != ' ') version ++;
-    *version = '\0';
-
-    //get version.
-    version ++;
-    while (version < end && istrim(*version)) version ++;   //trim
-    //printf("version:%s\n", version);
-
-    std::string(method).swap(first);
-    std::string(uri).swap(second);
-    std::string(version).swap(third);
-
+    // get version
+    trimleft(next, end);
+    std::string(next, end - next + 1).swap(third);
+    
     return true;
 }
 
@@ -369,6 +431,10 @@ bool uhttp::recv_start(uhttprequest & request)
     if (!recv_start(method, uri, version)) {
         return false;
     }
+    
+    ulog(ulog_debug, "uhttp:recv_request[%s][%s][%s]\n",
+        method.c_str(), uri.c_str(), version.c_str());
+    
 
     const int imethod = analyse_method(method.c_str());
     request.set_method(imethod);
@@ -378,10 +444,6 @@ bool uhttp::recv_start(uhttprequest & request)
     const int iversion = analyse_version(version.c_str());
     request.set_version(iversion);
 
-    //printf("method:%2d:%s, uri:%s, version:%d:%s\n",
-    //    imethod, method.c_str(), uri.c_str(), iversion, version.c_str());
-    
-    //invalid.
     if(imethod == uhttp_method_unknown || iversion == uhttp_version_unknown) {
         return false;
     }
@@ -397,16 +459,13 @@ bool uhttp::recv_start(uhttpresponse& response)
         return false;
     }
 
+    ulog(ulog_debug, "uhttp:recv_response[%s][%s][%s]\n",
+        version.c_str(), status.c_str(), reason.c_str());
     
     const int iversion = analyse_version(version.c_str());
     response.set_version(iversion);
-
     response.set_statuscode(atoi(status.c_str()));
 
-    //printf("verison:%2d:%s, status:%s\n",
-    //    iversion, version.c_str(), (status.c_str()));
-    
-    //invalid.
     if(iversion == uhttp_version_unknown) {
         return false;
     }
@@ -418,10 +477,7 @@ bool uhttp::recv_header(uhttpmessage & msg)
 {
     bool good = false;
     std::streamsize readn = 0;
-    char * end;
-    char * name;
-    char * value;
-    char * sep;
+    char * sep, * pb, * pe, * begin, * end;
     
     for ( ; ; ) {
         good = stream_.getline(line_, linesize_).good();
@@ -429,47 +485,36 @@ bool uhttp::recv_header(uhttpmessage & msg)
             break;
         }
 
-        readn = stream_.gcount();
-        
-        end = line_ + readn - 1;
-        while ((end >= line_) && istrim(*end)) {
-            *end -- = '\0';
-        }
-        //printf("read line:%s\n", line_);
+        readn   = stream_.gcount();
+        begin   = line_;
+        end     = line_ + readn - 1;
 
-        if (*line_ == '\0') {
+        trimright(begin, end);
+        if (begin > end) {
             break;
         }
-        
-        //get name.
-        name = line_;
-        while (name < end && istrim(*name)) name ++; //trim name left.
+        set(end + 1, '\0');
 
-        //get separate ':'
-        sep = name;
-        while (sep < end && *sep != ':') sep ++;
-        *sep = '\0';
-
-        //get value.
-        value = sep + 1;
-        while (value < end && istrim(*value)) value ++; //trim value left.
-
-        //trim name right.
-        sep --;
-        while (sep >= name && istrim(*sep)) {
-            *sep -- = '\0';
+        sep     = get(begin, end, ':', pb, pe);
+        if (sep == NULL) {
+            return false;
         }
 
-        msg.set_header(name, value);
-        //printf("header==>  '%s' = '%s'\n", name, value);
+        trimleft(sep, end);
+
+        std::string key(pb, pe - pb + 1);
+        std::string value(sep, end - sep + 1);
+        
+        msg.set_header(key, value);
     } 
 
     return good;
 }
 
-bool uhttp::recv_body(uhttpmessage & msg)
+int uhttp::recv_body(uhttpmessage & msg)
 {
-    bool good = true;
+    bool    good    = true;
+    int     ret     = en_succeed;
 
     const char * encoding 
         = msg.get_header(uhttpmessage::HEADER_TRANSFER_ENCODING);
@@ -483,7 +528,7 @@ bool uhttp::recv_body(uhttpmessage & msg)
             }
 
             char * end = line_ + stream_.gcount() - 1;
-            while ((end != line_) && istrim(*end)) {
+            while ((end != line_) && iswhitespace(*end)) {
                 *end -- = '\0';
             }
             
@@ -542,31 +587,29 @@ bool uhttp::recv_body(uhttpmessage & msg)
         }
     }
 
-    const char * content_type = 
-        msg.get_header(uhttpmessage::HEADER_CONTENT_ENCODING);
-    bool gzip = false;
+    if (!good) {
+        ret = msg.type() ==uhttpmessage::en_request ? 
+            en_recv_req_body_error : en_recv_res_body_error;
+    } else {
     
-    if (content_type != NULL) {
-        gzip = strstr(content_type, "gzip") != NULL;
-    }
-    
-    if (good && (gzip) && msg.content().size() > 0) {
-        std::string content;
-        
-        const char * dataencoding 
-            = msg.get_header(uhttpmessage::HEADER_CONTENT_ENCODING);
+        const char * content_type = 
+            msg.get_header(uhttpmessage::HEADER_CONTENT_ENCODING);
         bool gzip = false;
-        if (dataencoding != NULL && strstr(dataencoding, "gzip") != NULL) {
-            gzip = true;
+        bool suc  = false;
+        
+        if (content_type != NULL) {
+            gzip = strstr(content_type, "gzip") != NULL;
         }
-
-        if (gzip) {
+        
+        if (good && (gzip) && msg.content().size() > 0) {
+            std::string content;
+            
             z_stream dstream = {0};
-    
+
             dstream.zalloc     = NULL; 
             dstream.zfree      = NULL; 
             dstream.opaque     = NULL; 
-    
+
             if (inflateInit2(&dstream, MAX_WBITS + 16) != Z_OK) {
                 //printf("inflate init failed!\n");
                 gzip = false;
@@ -601,14 +644,20 @@ bool uhttp::recv_body(uhttpmessage & msg)
             if (dstream.total_in == desize) {
                 msg.content().swap(content);
                 msg.remove_header(uhttpmessage::HEADER_CONTENT_ENCODING);
+                suc = true;
             }
 
             if (inflateEnd(&dstream) != Z_OK) {
             }
         }
+
+        if (gzip && !suc) {
+            ret = msg.type() ==uhttpmessage::en_request ? 
+                en_recv_req_decomp_error : en_recv_res_decomp_error;
+        }
     }
 
-    return good;
+    return ret;
 }
 
 int uhttp::analyse_method(const char * method)
