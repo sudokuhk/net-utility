@@ -16,9 +16,7 @@ public:
 
     //handle request, and fill response
     virtual int onhttp(const uhttprequest & request,
-        uhttpresponse & response) = 0;
-
-    virtual int onerror(int errcode, uhttpresponse & response) = 0;
+        uhttpresponse & response, int errcode) = 0;
 };
 
 class uhttp
@@ -26,8 +24,8 @@ class uhttp
 public:
     static const char * get_reasonphrase(int statuscode) ;
     static const char * get_version(int version);
-    static void set_max_content_limit(size_t limit);
     static const char * get_methodname(int method);
+	static void set_max_content_limit(size_t limit);
 
 public:
     enum en_uhttp_errcode {
@@ -38,6 +36,7 @@ public:
         en_recv_req_start_error,
         en_recv_req_header_error,
         en_recv_req_body_error,
+        en_recv_req_body_too_big_error,
         
         en_send_req_start_error,
         en_send_req_header_error,
@@ -46,6 +45,7 @@ public:
         en_recv_res_start_error,
         en_recv_res_header_error,
         en_recv_res_body_error,
+        en_recv_res_body_too_big_error,
 
         en_send_res_start_error,
         en_send_res_header_error,
@@ -58,7 +58,8 @@ public:
     };
     
 public:
-    uhttp(std::iostream & stream, uhttphandler & handler, bool gzip = true);
+    uhttp(std::iostream & stream, uhttphandler & handler, 
+        bool gzip = true, bool chunk = false);
 
     virtual ~uhttp();
 
@@ -97,14 +98,16 @@ private:
         std::string & third, bool stringsplit = false);
 
     bool compress(std::string & content, int type = 0);
-    
+
+    bool send_by_chunk(const std::string & data);
 private:
     std::iostream & stream_;
     uhttphandler &  handler_;
     
     int             linesize_;
     char * const    line_;
-    
+
+    bool            chunk_;
     bool            gzip_;
     int             compress_buf_size_;
     char * const    compress_buf_;
@@ -112,6 +115,7 @@ private:
     char * const    decompress_buf_;
 
     static size_t   max_content_limit_;
+    static size_t   chunk_size_;
 };
 
 #endif

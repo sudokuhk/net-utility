@@ -18,7 +18,7 @@ const char * uhttpmessage::HEADER_XFF               = "X-Forwarded-For";
 
 uhttpmessage::uhttpmessage(int type)
     : type_(type)
-    , version_(uhttp_version_1_0)
+    , version_(uhttp_version_1_1)
     , content_()
     , header_()
 {

@@ -105,11 +105,13 @@ const static struct sreasonphrase_t
     {0, NULL},
 };
 
-uhttp::uhttp(std::iostream & stream, uhttphandler & handler, bool gzip)
+uhttp::uhttp(std::iostream & stream, uhttphandler & handler, 
+    bool gzip, bool chunk)
     : stream_(stream)
     , handler_(handler)
     , linesize_(HTTP_RECV_MAXSIZE)
     , line_((char *)malloc(linesize_))
+    , chunk_(chunk)
     , gzip_(gzip)
     , compress_buf_size_(HTTP_RECV_MAXSIZE * 2)
     , compress_buf_(gzip_ ? (char *)malloc(compress_buf_size_) : NULL)
@@ -149,56 +151,52 @@ void uhttp::run()
         
         result = recv_request(request);
         
-        if (result == en_succeed) {
-            alive = request.keep_alive();
-            //request.output_header(std::cout);
+        alive = request.keep_alive();
+        //request.output_header(std::cout);
 
-            handler_res = handler_.onhttp(request, response);
+        if (!stream_.good()) {
+            result = en_socket_reset;
+        }
+        handler_res = handler_.onhttp(request, response, result);
 
-            if (request.version() == uhttp_version_1_0 ||
-                response.version() == uhttp_version_1_0 ||
-                !request.keep_alive() || 
-                !response.keep_alive()) { //  ||
-                //response.statuscode() != uhttp_status_ok) {
-                response.set_header(uhttpresponse::HEADER_CONNECTION, "close");
-            }
-
-            if (response.get_header(uhttpmessage::HEADER_DATE) == NULL) {
-                char buffer[256] = { 0 };
-                time_t t_time = time(NULL);
-                struct tm tm_time;
-                gmtime_r(&t_time, &tm_time);
-                //localtime_r(&t_time, &tm_time);
-                strftime(buffer, sizeof(buffer), 
-                    "%a, %d %b %Y %H:%M:%S %Z", &tm_time);
-                response.set_header(uhttpresponse::HEADER_DATE, buffer);
-            }
-            if (response.get_header(uhttpmessage::HEADER_SERVER) == NULL) {
-                response.set_header(uhttpresponse::HEADER_SERVER, "http/uhttp");
-            }
-        } else {
-        
-            if (!stream_.good()) {
-                result = en_socket_reset;
-            }
-            
-            handler_res =  handler_.onerror(result, response);
-            
-            if (response.statuscode() != 0 && stream_.good()) {
-                send_response(response);
-            } 
+        //network down, callback return, break loop.
+        if (result == en_socket_reset) {
             break;
         }
-        
+
+        if (request.version() == uhttp_version_1_0 ||
+            response.version() == uhttp_version_1_0 ||
+            !request.keep_alive() || 
+            !response.keep_alive()) { //  ||
+            //response.statuscode() != uhttp_status_ok) {
+            response.set_header(uhttpresponse::HEADER_CONNECTION, "close");
+        }
+
+        if (response.get_header(uhttpmessage::HEADER_DATE) == NULL) {
+            char buffer[256] = { 0 };
+            time_t t_time = time(NULL);
+            struct tm tm_time;
+            gmtime_r(&t_time, &tm_time);
+            //localtime_r(&t_time, &tm_time);
+            strftime(buffer, sizeof(buffer), 
+                "%a, %d %b %Y %H:%M:%S %Z", &tm_time);
+            response.set_header(uhttpresponse::HEADER_DATE, buffer);
+        }
+        if (response.get_header(uhttpmessage::HEADER_SERVER) == NULL) {
+            response.set_header(uhttpresponse::HEADER_SERVER, "http/uhttp");
+        }
+
         result = send_response(response);
         if (result != en_succeed || handler_res != 0) {
             if (!stream_.good()) {
                 result = en_socket_reset;
             }
             
-            handler_.onerror(result, response);
             break;
         }
+
+        request.clear();
+        response.clear();
     }
 
     delete prequest;
@@ -219,6 +217,10 @@ int uhttp::send_request(uhttprequest & request)
         request.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
         request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
     }
+
+    if (chunk_ && content.size() > chunk_size_) {
+        request.set_header(uhttpmessage::HEADER_TRANSFER_ENCODING, "chunked");
+    }
     
     stream_ << smethods[request.method()] << " " 
             << request.uri().get() << " "
@@ -237,7 +239,11 @@ int uhttp::send_request(uhttprequest & request)
     }
     
     if (!content.empty()) {
-        stream_.write(content.data(), content.size());
+        if (chunk_ && content.size() > chunk_size_) {
+            send_by_chunk(content);
+        } else {
+            stream_.write(content.data(), content.size());
+        }
     }
 
     if (!stream_.flush().good()) {
@@ -274,6 +280,10 @@ int uhttp::send_response(uhttpresponse & response)
         response.set_header(uhttpmessage::HEADER_CONTENT_ENCODING, "gzip");
         response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, content.size());
     } 
+
+    if (chunk_ && content.size() > chunk_size_) {
+        response.set_header(uhttpmessage::HEADER_TRANSFER_ENCODING, "chunked");
+    }
     
     stream_ << sversions[response.version()] << " " 
             << response.statuscode() << " "
@@ -293,7 +303,11 @@ int uhttp::send_response(uhttpresponse & response)
     }
 
     if (!content.empty()) {
-        stream_.write(content.data(), content.size());
+        if (chunk_ && content.size() > chunk_size_) {
+            send_by_chunk(content);
+        } else {
+            stream_.write(content.data(), content.size());
+        }
     }
 
     if (!stream_.flush().good()) {
@@ -489,6 +503,10 @@ bool uhttp::recv_header(uhttpmessage & msg)
         begin   = line_;
         end     = line_ + readn - 1;
 
+        if (readn > HTTP_RECV_MAXSIZE) {
+            return false;
+        }
+
         trimright(begin, end);
         if (begin > end) {
             break;
@@ -520,7 +538,7 @@ int uhttp::recv_body(uhttpmessage & msg)
         = msg.get_header(uhttpmessage::HEADER_TRANSFER_ENCODING);
 
     if (encoding != NULL && strcasecmp(encoding, "chunked") == 0) {
-
+        
         while (good) {
             good = stream_.getline(line_, linesize_).good();
             if (!good) {
@@ -538,9 +556,10 @@ int uhttp::recv_body(uhttpmessage & msg)
             if (size == 0) {
                 good = stream_.getline(line_, linesize_).good();
                 break;
-            } else if (size > (int)max_content_limit_) {
-                good = false;
-                break;
+            } else if (msg.content().size() + (size_t)size > max_content_limit_) {
+                return msg.type() ==uhttpmessage::en_request 
+                    ? en_recv_req_body_too_big_error
+                    : en_recv_res_body_too_big_error;
             }
             
             int readn = 0;
@@ -551,11 +570,6 @@ int uhttp::recv_body(uhttpmessage & msg)
                 if (good) {
                     msg.append_content(line_, readn);
                     size -= readn;
-
-                    if (msg.content().size() > max_content_limit_) {
-                        good = false;
-                        break;
-                    }
                 }
             }
 
@@ -582,7 +596,9 @@ int uhttp::recv_body(uhttpmessage & msg)
                     }
                 }
             } else {
-                good = false;
+                return msg.type() ==uhttpmessage::en_request 
+                    ? en_recv_req_body_too_big_error
+                    : en_recv_res_body_too_big_error;
             }
         }
     }
@@ -658,6 +674,43 @@ int uhttp::recv_body(uhttpmessage & msg)
     }
 
     return ret;
+}
+
+bool uhttp::send_by_chunk(const std::string & data)
+{
+    size_t size     = data.size();
+    size_t loop     = size / chunk_size_;
+    size_t off      = 0;
+    
+    const char * p  = data.data();
+    
+    for (size_t i = 0; i < loop; i++) {
+        stream_ << std::hex << chunk_size_ << UHTTP_LINE_END;
+        
+        stream_.write(p + off, chunk_size_);
+        off += chunk_size_;
+
+        stream_ << UHTTP_LINE_END;
+
+        if (!stream_.flush().good()) {
+            return false;
+        }
+    }
+
+    if (off < size) {
+        stream_ << std::hex << size - off << UHTTP_LINE_END;
+        stream_.write(p + off, size - off);
+        stream_ << UHTTP_LINE_END;
+
+        if (!stream_.flush().good()) {
+            return false;
+        }
+    }
+
+    stream_ << 0 << UHTTP_LINE_END;
+    stream_ << UHTTP_LINE_END;
+        
+    return stream_.flush().good();
 }
 
 int uhttp::analyse_method(const char * method)
@@ -804,4 +857,4 @@ void uhttp::set_max_content_limit(size_t limit)
 }
 
 size_t uhttp::max_content_limit_ = 4 * 1024 * 1024; // 4M
-
+size_t uhttp::chunk_size_        = 4096;
