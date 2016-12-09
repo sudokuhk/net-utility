@@ -73,7 +73,7 @@ INC_PATH = $(shell pwd)
 LIB_PATH = $(shell pwd)
 LIBRARYS = 
 
-INC_PATH += ../
+INC_PATH += ../../
 LIB_PATH += 
 LIBRARYS += z
 			 
@@ -94,39 +94,33 @@ LIBS += $(patsubst %, -l%, $(LIBRARYS))
 # Targets of the build
 #****************************************************************************
 
-OUTPUT := uimg
+OUTPUT := test_uimg
 
 #****************************************************************************
 # Source files
 #****************************************************************************
 
 LOG_SRCS := 	\
-	../ulog/ulog.cpp
+	../../ulog/ulog.cpp
 
 CONFIG_SRCS :=	\
-	../uconfig/uconfig.cpp	\
-	../uconfig/uconfig_default.cpp	\
+	../../uconfig/uconfig.cpp	\
+	../../uconfig/uconfig_default.cpp	\
 
 FS_SRCS := \
-	../utools/ufs.cpp	\
-	../utools/umd5sum.cpp	\
+	../../utools/ufs.cpp	\
+	../../utools/umd5sum.cpp	\
 
 NET_SRCS := \
-		$(wildcard ../unetwork/*.cpp) 	\
-		$(wildcard ../uthread/*.cpp)	\
-		$(wildcard ../uhttp/*.cpp)		\
+		$(wildcard ../../unetwork/*.cpp) 	\
+		$(wildcard ../../uthread/*.cpp)	\
+		$(wildcard ../../uhttp/*.cpp)		\
 
-DEP_3RD := \
-		./3rd/cjson/cJSON.cpp	\
 
 SRCS := \
-		./main.cpp \
-		./uimg.cpp	\
-		./uimgworker.cpp	\
-		./uimgserverunit.cpp	\
-		./uimgio.cpp	\
+		./test_uimg.cpp \
 
-SRCS += $(LOG_SRCS) $(CONFIG_SRCS) $(FS_SRCS) $(NET_SRCS)  $(DEP_3RD)
+SRCS += $(FS_SRCS) $(NET_SRCS)
 
 DEP_SOURCES = $(notdir $(SRCS))
 OUTPUT_DEP_OBJS = $(patsubst %.cpp,%.o, $(DEP_SOURCES))

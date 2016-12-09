@@ -11,9 +11,27 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdlib.h>
+
 #include <ulog/ulog.h>
+#include <3rd/cjson/cJSON.h>
+
 
 #define SUC_TIPS "Image upload successfully! You can get this image via this address:<br/><br/>\n"
+
+static const char * s_post_errors[] = {
+    "Upload Success.",
+    "Internal error.",
+    "File type not support.",
+    "Request method error.",
+    "Access error.",
+    "Request body parse error.",
+    "Content-Length error.",
+    "Content-Type error.",
+    "File too large.",
+    "Request url illegal.",
+    "Image not existed.",
+};
 
 const uimgworker::handler_type uimgworker::handlers[] = {
     {"/favicon.ico",    &uimgworker::favicon},
@@ -85,8 +103,8 @@ int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
         clientip = peerip_;
     }
 
-    ulog(ulog_debug, "[%s] [%s %s] proxy[%s]\n", 
-        clientip.c_str(), path.c_str(), request.methodname(),
+    ulog(ulog_debug, "[fd:%d,%s] [%s %s] proxy[%s]\n", 
+        socket_.socket(), clientip.c_str(), path.c_str(), request.methodname(),
         has_proxy ? proxyips.c_str() : "");
     
     const uimgworker::handler_type * h;
@@ -112,13 +130,18 @@ int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
         response.statuscode(), response.reasonphrase(), 
         has_proxy ? proxyips.c_str() : "");
     
-    response.set_header(uhttpresponse::HEADER_SERVER, "uimg/img");
-
     monitor_.onworkerevent(request.method(), path.c_str(), 
         request.content().size(), 
         response.statuscode(), response.content().size());
     
     return ret;
+}
+
+int uimgworker::onerror(int errcode, uhttpresponse & response)
+{
+    //ulog(ulog_error, "[fd:%d] error:%d!\n", socket_.socket(), errcode);
+    
+    return 0;
 }
 
 int uimgworker::notfind(const uhttprequest & request, uhttpresponse & response)
@@ -193,13 +216,15 @@ int uimgworker::index(const uhttprequest & request, uhttpresponse & response)
 int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
 {
     typedef const char * const_pchar;
-    bool suc    = false;
-    bool binary = false;
+    int result  = en_post_succeed;
     const_pchar ptype, pboundary, pintype, pequal, plquote, prquote, ptypeend;
+    std::string md5;
+    int fsize   = 0;
     
     if (request.method() == uhttp_method_post) {
 
         do {
+            result = en_post_content_type_error;
             ptype = request.get_header(uhttpmessage::HEADER_CONTENT_TYPE);
             if (ptype == NULL) {
                 break;
@@ -229,23 +254,28 @@ int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
                         break;
                     }
                 }
-                
                 std::string boundary(plquote, prquote - plquote);
 
+                result = en_post_body_error;
                 uboundaryparser parser;
                 std::vector<uboundaryparser::uboundaryinfo> info;
-                if ( parser.parse(request.content(), boundary.c_str(), info)) {
+                if (parser.parse(request.content(), boundary.c_str(), info)) {
                     ulog(ulog_info, "uboundaryparser ok!, output:%ld\n", info.size());
                     
                     for (size_t i = 0; i < info.size(); i++) {
                         
                         md5_.reset();
                         md5_.update(info[i].data, info[i].len);
-                        std::string md5 = md5_.toString();
                         
-                        //printf("md5:%s\n", md5.c_str());
+                        md5     = md5_.toString();
+                        fsize   = info[i].len;
+
                         if (io_.save(md5, info[i].data, info[i].len) == 0) {
-                            suc = true;
+                            result = en_post_succeed;
+                        } else {
+                            result  = en_post_internal_error;
+                        }
+                        /*if (io_.save(md5, info[i].data, info[i].len) == 0) {
                             response.append_content("<h1>MD5: ");
                             response.append_content(md5);
                             response.append_content("</h1>\n");
@@ -254,41 +284,42 @@ int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
                             response.append_content("<h1>File:");
                             response.append_content(info[i].filename);
                             response.append_content(" Upload Failed!</h1>\n");
-                        }
+                        }*/
+
+                        break;
                     }
                 } else {
                     ulog(ulog_error, "uboundaryparser parse failed!\n");
                     break;
                 }
             } else { //binary.
-                binary = true;
                 const std::string & data = request.content();
 
                 ulog(ulog_debug, "upload, binary. size:%ld!\n", data.size());
 
                 md5_.reset();
                 md5_.update(data.data(), data.size());
-                std::string md5 = md5_.toString();
+                
+                md5     = md5_.toString();
+                fsize   = data.size();
+                
                 ulog(ulog_debug, "calc md5:%s\n", md5.c_str());
 
-                int result = io_.save(md5, data.data(), data.size());
-                if (result == 0) {
-                    suc = true;
+                int saveret = io_.save(md5, data.data(), data.size());
+                if (saveret == 0) {
+                    result  = en_post_succeed;
+                } else {
+                    result  = en_post_internal_error;
                 }
                 
-                ulog(ulog_debug, "save result:%d\n", result);
+                ulog(ulog_debug, "save result:%d\n", saveret);
             }
         } while (0);
     }
 
     response.set_statuscode(uhttp_status_ok);
-    if (binary) {
-        
-    } else if (!suc) {
-        response.set_header(uhttpresponse::HEADER_CONTENT_TYPE, "text/html");
-        response.set_content("<h1>Upload Failed!</h1></body></html>");
-        return 0;
-    }
+    response.set_header(uhttpresponse::HEADER_CONTENT_TYPE, "application/json");
+    response.set_content(generate_json(result, md5, fsize));
     
     return 0;
 }
@@ -366,5 +397,34 @@ bool uimgworker::check_etag(const uhttprequest & request,
     }
 
     return ret;
+}
+
+std::string uimgworker::generate_json(int ret, 
+    const std::string & md5, int upsize)
+{
+    std::string jsonstr("{ret:-1, code:\"unkown error\"}");
+
+    if (ret < 0 || ret > en_post_max) {
+        return jsonstr;
+    }
+
+    cJSON *j_ret        = cJSON_CreateObject();
+
+    cJSON_AddNumberToObject(j_ret, "ret", ret);
+    cJSON_AddStringToObject(j_ret, "md5", 
+        ret == en_post_succeed ? md5.c_str() : "");
+    cJSON_AddNumberToObject(j_ret, "size", 
+        ret == en_post_succeed ? upsize : 0);
+    cJSON_AddStringToObject(j_ret, "message", s_post_errors[ret]);
+        
+    char * pjson = cJSON_PrintUnformatted(j_ret);
+    ulog(ulog_debug, "ret json: %s\n", pjson);
+
+    std::string(pjson).swap(jsonstr);
+    
+    cJSON_Delete(j_ret);
+    free(pjson);
+    
+    return jsonstr;
 }
 

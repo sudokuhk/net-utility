@@ -213,8 +213,8 @@ void uimg_server::log(int level, const char * fmt, va_list valist)
     off = strftime(log_buf_, log_buf_size_, "%Y-%m-%d %H:%M:%S", 
         &tm_time); 
     
-    off += snprintf(log_buf_ + off, log_buf_size_ - off, ":%.6d [%s] ", 
-        (int)tv.tv_usec, getstringbylevel(level));
+    off += snprintf(log_buf_ + off, log_buf_size_ - off, ":%.6d [P:%ld][%s] ", 
+        (int)tv.tv_usec, pthread_self(), getstringbylevel(level));
         
     off += vsnprintf(log_buf_ + off, log_buf_size_ - off, fmt, valist);
 
