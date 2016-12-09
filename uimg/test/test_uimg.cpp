@@ -99,7 +99,7 @@ public:
     virtual void run()
     {
         utcpsocket * socket = new utcpsocket(1024, socket_fd_, schedule_);
-        uhttp http(*socket, *this, false);
+        uhttp http(*socket, *this, false, true);
     
         printf("client %d running!\n", socket_fd_);
         socket->set_timeout(5 * 1000);
@@ -132,15 +132,11 @@ public:
         delete this;
     }
     
-    int onhttp(const uhttprequest & request, uhttpresponse & response)
+    int onhttp(const uhttprequest & request, uhttpresponse & response, int errcode)
     {
         return -1;
     }
 
-    int onerror(int errcode, uhttpresponse & response)
-    {
-        return -1;
-    }
 
 private:
     uschedule * schedule_;

@@ -39,20 +39,19 @@ public:
 
     virtual void run();
 
-    virtual int onhttp(const uhttprequest & request, uhttpresponse & response);
-    
-    virtual int onerror(int errcode, uhttpresponse & response);
+    virtual int onhttp(const uhttprequest & request, 
+        uhttpresponse & response, int errcode);
     
 private:
-    typedef int (uimgworker::*handler)(const uhttprequest &, uhttpresponse &);
+    typedef int (uimgworker::*handler)(const uhttprequest &, uhttpresponse &, int);
 
     // can use lua script replace.
-    int echo(const uhttprequest & request, uhttpresponse & response);
-    int notfind(const uhttprequest & request, uhttpresponse & response);
-    int favicon(const uhttprequest & request, uhttpresponse & response);
-    int upload(const uhttprequest & request, uhttpresponse & response);
-    int download(const uhttprequest & request, uhttpresponse & response);
-    int index(const uhttprequest & request, uhttpresponse & response);
+    int echo(const uhttprequest & request, uhttpresponse & response, int errcode);
+    int notfind(const uhttprequest & request, uhttpresponse & response, int errcode);
+    int favicon(const uhttprequest & request, uhttpresponse & response, int errcode);
+    int upload(const uhttprequest & request, uhttpresponse & response, int errcode);
+    int download(const uhttprequest & request, uhttpresponse & response, int errcode);
+    int index(const uhttprequest & request, uhttpresponse & response, int errcode);
 
 private:
     void add_extheaders(uhttpresponse & response);

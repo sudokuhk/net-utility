@@ -120,7 +120,7 @@ NET_SRCS := \
 SRCS := \
 		./test_uimg.cpp \
 
-SRCS += $(FS_SRCS) $(NET_SRCS)
+SRCS += $(FS_SRCS) $(NET_SRCS) $(LOG_SRCS)
 
 DEP_SOURCES = $(notdir $(SRCS))
 OUTPUT_DEP_OBJS = $(patsubst %.cpp,%.o, $(DEP_SOURCES))

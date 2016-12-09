@@ -52,7 +52,8 @@ private:
 
 private:
     const uimg_conf & config_;
-    
+
+    uimglock    lock_;
     uschedule   schedule_;
     bool        running_;
     pthread_t   thread_;

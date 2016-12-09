@@ -23,6 +23,16 @@
 
 uimg_server * uimg_server::sinstance = NULL;
 
+const char * title = 
+"         _    _  _____  __  __   _____ \n"
+"        | |  | ||_   _||  \\/  | / ____|\n"
+"        | |  | |  | |  | \\  / || |  __ \n"
+"        | |  | |  | |  | |\\/| || | |_ |\n"
+"        | |__| | _| |_ | |  | || |__| |\n"
+"         \\____/ |_____||_|  |_| \\_____|\n"
+"                                       \n"
+"   Copyright (c) 2016-2016 sudoku.huang@gmail.com\n";
+
 void uimg_server::uimg_log_hook(int level, const char * fmt, va_list valist)
 {
     sinstance->log(level, fmt, valist);
@@ -39,6 +49,7 @@ uimg_server::uimg_server(uimg_conf_t & config)
 {
     sinstance   = this;
     log_buf_    = (char *)malloc(log_buf_size_);
+    pthread_mutex_init(&mutex_, NULL);
 }
 
 uimg_server::~uimg_server()
@@ -53,6 +64,7 @@ uimg_server::~uimg_server()
     if (listen_fd_ > 0) {
         close(listen_fd_);
     }
+    pthread_mutex_destroy(&mutex_);
 }
 
 bool uimg_server::run()
@@ -65,7 +77,7 @@ bool uimg_server::run()
     }
     
     setulog(uimg_server::uimg_log_hook);
-    ulog(ulog_info, "init log done!\n");
+    ulog(ulog_error, "\n\n%s\n", title);
 
     if (!listen()) {
         ulog(ulog_error, "listen %s:%d failed!\n", 
@@ -191,7 +203,8 @@ void uimg_server::log(int level, const char * fmt, va_list valist)
     if (config_.log_level < level) {
         return;
     }
-    
+
+    pthread_mutex_lock(&mutex_);
     size_t off = 0;
     
     time_t t_time = time(NULL);
@@ -219,4 +232,5 @@ void uimg_server::log(int level, const char * fmt, va_list valist)
     off += vsnprintf(log_buf_ + off, log_buf_size_ - off, fmt, valist);
 
     write(log_fd_, log_buf_, off);
+    pthread_mutex_unlock(&mutex_);
 }

@@ -18,7 +18,8 @@ void * uimgserverunit::threadf(void * args)
 
 uimgserverunit::uimgserverunit(const uimg_conf & config)
     : config_(config)
-    , schedule_(8 * 1024, 100000, false, NULL)
+    , lock_()
+    , schedule_(8 * 1024, 100000, false, &lock_)
     , running_(false)
     , thread_(-1)
 {

@@ -23,6 +23,7 @@ typedef struct uimg_conf
     int             threads;
     int             deamon;
     std::string     root_path;
+    int             limitsize;
 
     //log
     int             log_level;
@@ -70,6 +71,7 @@ private:
     char *  log_buf_;
     int     log_buf_size_;
     time_t  last_logfile_t_;
+    pthread_mutex_t mutex_;
 
     std::vector<uimgserverunit *> server_units_;
 };

@@ -137,6 +137,17 @@ bool load_config(const std::string & file, uimg_conf_t & config)
             fprintf(stderr, "don't config root path, use default(%s)!\n", 
                 config.root_path.c_str());
         }
+
+        if ((value = pconfig->get_string("uimg", "limitsize")) != NULL) {
+            config.limitsize = atoi(value);
+        } else {
+            config.limitsize = -1;
+        }
+
+        config.deamon = 0;
+        if ((value = pconfig->get_string("uimg", "deamon")) != NULL) {
+            config.deamon = atoi(value) == 0 ? 0 : 1;
+        }
     } while (0);
 
     // log
@@ -243,6 +254,17 @@ int main(int argc, char * argv[])
             config_file.c_str());
         //show_usage(appname.c_str());
         exit(0);
+    }
+ 
+    if(uconfig.deamon == 1) {
+        if(daemon(1, 1) < 0) {
+            fprintf(stderr, "Create daemon failed!\n");
+            exit(-1);
+        } else {
+            fprintf(stdout, "%s %s\n", appname.c_str(), version.c_str());
+            fprintf(stdout, "Copyright (c) 2016-2016 sudoku.huang@gmail.com\n");
+            fprintf(stderr, "\n");
+        }
     }
 
     uconfig.cwd     = cwd;

@@ -72,18 +72,12 @@ void uimgworker::run()
     delete this;
 }
 
-int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::onhttp(const uhttprequest & request, 
+        uhttpresponse & response, int errcode)
 {
     const std::string path = request.uri().path();
-    
-    //printf("fd:%d, uri:%s\n", socket_.socket(), request.uri().get().c_str());
-    //if (request.get_header(uhttpresponse::HEADER_XFF) != NULL) {
-    //    printf("fd:%d, from:%s\n", socket_.socket(), 
-    //        request.get_header(uhttpresponse::HEADER_XFF));
-    //}
-    //uhttprequest req = request;
-    //req.output_header(std::cout);
 
+    // get real client ip. use to access control.
     const char * xff = request.get_header(uhttpresponse::HEADER_XFF);
     std::string clientip;
     std::string proxyips;
@@ -103,6 +97,16 @@ int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
         clientip = peerip_;
     }
 
+    if (errcode == uhttp::en_socket_reset) {
+        ulog(ulog_debug, "[fd:%d,%s] reset!\n", 
+            socket_.socket(), clientip.c_str());
+        return -1;
+    }
+
+    //if (response.statuscode() != 0) {
+    //    return -1;        
+    //}
+
     ulog(ulog_debug, "[fd:%d,%s] [%s %s] proxy[%s]\n", 
         socket_.socket(), clientip.c_str(), path.c_str(), request.methodname(),
         has_proxy ? proxyips.c_str() : "");
@@ -119,10 +123,10 @@ int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
     
     if (h->cmd == NULL) {
         ulog(ulog_error, "not find handler for path:%s!\n", h->cmd);
-        ret = notfind(request, response);
+        ret = notfind(request, response, errcode);
     } else {
         handler hf = h->func;
-        ret = (this->*hf)(request, response);
+        ret = (this->*hf)(request, response, errcode);
     }
 
     ulog(ulog_info, "[%s] [%s %s] --> [%d %s] proxy[%s]\n", 
@@ -137,14 +141,8 @@ int uimgworker::onhttp(const uhttprequest & request, uhttpresponse & response)
     return ret;
 }
 
-int uimgworker::onerror(int errcode, uhttpresponse & response)
-{
-    //ulog(ulog_error, "[fd:%d] error:%d!\n", socket_.socket(), errcode);
-    
-    return 0;
-}
-
-int uimgworker::notfind(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::notfind(const uhttprequest & request, 
+    uhttpresponse & response, int errcode)
 {
     ulog(ulog_debug, "notfind!\n");
     response.set_statuscode(uhttp_status_not_found);
@@ -155,7 +153,8 @@ int uimgworker::notfind(const uhttprequest & request, uhttpresponse & response)
     return -1;
 }
 
-int uimgworker::favicon(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::favicon(const uhttprequest & request, 
+    uhttpresponse & response, int errcode)
 {
     ulog(ulog_debug, "favicon request!\n");
     response.set_statuscode(uhttp_status_ok);
@@ -165,7 +164,8 @@ int uimgworker::favicon(const uhttprequest & request, uhttpresponse & response)
     return 0;
 }
 
-int uimgworker::echo(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::echo(const uhttprequest & request, 
+    uhttpresponse & response, int errcode)
 {   
     ulog(ulog_debug, "echo request!\n");
 
@@ -176,7 +176,8 @@ int uimgworker::echo(const uhttprequest & request, uhttpresponse & response)
     return 0;
 }
 
-int uimgworker::index(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::index(const uhttprequest & request, 
+    uhttpresponse & response, int errcode)
 {
     int ret = 0;
     std::string filename = config_.root_path + "index.html";
@@ -185,7 +186,7 @@ int uimgworker::index(const uhttprequest & request, uhttpresponse & response)
     int fd = open(filename.c_str(), O_RDONLY);
     if (fd < 0) {
         ulog(ulog_error, "open index file(%s) failed!\n", filename.c_str());
-        ret = notfind(request, response);
+        ret = notfind(request, response, errcode);
     } else {
         struct stat sb;
         if (stat(filename.c_str(), &sb) != 0) {
@@ -201,7 +202,7 @@ int uimgworker::index(const uhttprequest & request, uhttpresponse & response)
         if (sb.st_size == 0 || 
             (rdn = read(fd, (void *)&content[0], sb.st_size)) != sb.st_size) {
             ulog(ulog_error, "not enough, need:%ld, read:%ld!\n", sb.st_size, rdn);
-            ret = notfind(request, response);
+            ret = notfind(request, response, errcode);
         } else {
             response.set_statuscode(uhttp_status_ok);
             response.content().swap(content);
@@ -213,7 +214,8 @@ int uimgworker::index(const uhttprequest & request, uhttpresponse & response)
     return ret;
 }
 
-int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::upload(const uhttprequest & request, 
+    uhttpresponse & response, int errcode)
 {
     typedef const char * const_pchar;
     int result  = en_post_succeed;
@@ -222,8 +224,17 @@ int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
     int fsize   = 0;
     
     if (request.method() == uhttp_method_post) {
-
         do {
+            if (config_.limitsize > 0 && 
+                (int)request.content().size() > config_.limitsize) {
+                fsize   = (int)request.content().size();
+                result  = en_post_file_too_big;
+                break;
+            } else if (errcode != uhttp::en_succeed) {
+                result = en_post_internal_error;
+                break;
+            }
+            
             result = en_post_content_type_error;
             ptype = request.get_header(uhttpmessage::HEADER_CONTENT_TYPE);
             if (ptype == NULL) {
@@ -315,16 +326,19 @@ int uimgworker::upload(const uhttprequest & request, uhttpresponse & response)
                 ulog(ulog_debug, "save result:%d\n", saveret);
             }
         } while (0);
+    } else {
+        result = en_post_req_method_error;
     }
 
     response.set_statuscode(uhttp_status_ok);
     response.set_header(uhttpresponse::HEADER_CONTENT_TYPE, "application/json");
     response.set_content(generate_json(result, md5, fsize));
     
-    return 0;
+    return result;
 }
 
-int uimgworker::download(const uhttprequest & request, uhttpresponse & response)
+int uimgworker::download(const uhttprequest & request, 
+    uhttpresponse & response, int errcode)
 {
     ulog(ulog_debug, "download request\n");
 
@@ -359,7 +373,7 @@ int uimgworker::download(const uhttprequest & request, uhttpresponse & response)
             response.set_statuscode(uhttp_status_ok);
         }
     } else {
-        ret = notfind(request, response);
+        ret = notfind(request, response, errcode);
     }
     
     return ret;
@@ -413,8 +427,7 @@ std::string uimgworker::generate_json(int ret,
     cJSON_AddNumberToObject(j_ret, "ret", ret);
     cJSON_AddStringToObject(j_ret, "md5", 
         ret == en_post_succeed ? md5.c_str() : "");
-    cJSON_AddNumberToObject(j_ret, "size", 
-        ret == en_post_succeed ? upsize : 0);
+    cJSON_AddNumberToObject(j_ret, "size", upsize);
     cJSON_AddStringToObject(j_ret, "message", s_post_errors[ret]);
         
     char * pjson = cJSON_PrintUnformatted(j_ret);
