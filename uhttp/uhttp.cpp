@@ -220,6 +220,7 @@ int uhttp::send_request(uhttprequest & request)
 
     if (chunk_ && content.size() > chunk_size_) {
         request.set_header(uhttpmessage::HEADER_TRANSFER_ENCODING, "chunked");
+        request.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, chunk_size_);
     }
     
     stream_ << smethods[request.method()] << " " 
@@ -283,6 +284,7 @@ int uhttp::send_response(uhttpresponse & response)
 
     if (chunk_ && content.size() > chunk_size_) {
         response.set_header(uhttpmessage::HEADER_TRANSFER_ENCODING, "chunked");
+        response.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, chunk_size_);
     }
     
     stream_ << sversions[response.version()] << " " 
@@ -396,7 +398,7 @@ bool uhttp::recv_start(std::string & first, std::string & second,
     }
 
     std::streamsize rdn = stream_.gcount();
-    if (rdn >= HTTP_RECV_MAXSIZE) {
+    if (rdn >= linesize_) {
         ulog(ulog_error, "uhttp:recv_start max size:%ld\n", rdn);
         return false;
     }
@@ -503,7 +505,7 @@ bool uhttp::recv_header(uhttpmessage & msg)
         begin   = line_;
         end     = line_ + readn - 1;
 
-        if (readn > HTTP_RECV_MAXSIZE) {
+        if (readn > linesize_) {
             return false;
         }
 
@@ -556,10 +558,13 @@ int uhttp::recv_body(uhttpmessage & msg)
             if (size == 0) {
                 good = stream_.getline(line_, linesize_).good();
                 break;
-            } else if (msg.content().size() + (size_t)size > max_content_limit_) {
-                return msg.type() ==uhttpmessage::en_request 
+            } else if (msg.content().size() + (size_t)size > max_content_limit_
+                && ret == en_succeed) {
+                ret = msg.type() ==uhttpmessage::en_request 
                     ? en_recv_req_body_too_big_error
                     : en_recv_res_body_too_big_error;
+                ulog(ulog_error, "client intended to send too large chunked body:"
+                    "%ld+%d bytes\n", msg.content().size(), size);
             }
             
             int readn = 0;
@@ -567,16 +572,18 @@ int uhttp::recv_body(uhttpmessage & msg)
                 readn = size > linesize_ ? linesize_ : size;
                 good = stream_.read(line_, readn).good();
 
-                if (good) {
+                if (good && ret == en_succeed) {
                     msg.append_content(line_, readn);
-                    size -= readn;
-                }
+                } // else. discard directly when body too big.
+                size -= readn;
             }
 
             if (good) {
                 good = stream_.getline(line_, linesize_).good();
             }
         }
+        
+        msg.set_header(uhttpmessage::HEADER_CONTENT_LENGTH, msg.content().size());
     } else {
         const char * slength = 
             msg.get_header(uhttpmessage::HEADER_CONTENT_LENGTH);
@@ -584,23 +591,29 @@ int uhttp::recv_body(uhttpmessage & msg)
         if (slength != NULL) {
             int length = atoi(slength);
 
-            if (length <= (int)max_content_limit_) {
-                int readn = 0;
-                while (length > 0 && good) {
-                    readn = length > linesize_ ? linesize_ : length;
-                    good = stream_.read(line_, readn).good();
-
-                    if (good) {
-                        msg.append_content(line_, readn);
-                        length -= readn;
-                    }
-                }
-            } else {
-                return msg.type() ==uhttpmessage::en_request 
+            if (length > (int)max_content_limit_) {
+                ret = msg.type() ==uhttpmessage::en_request 
                     ? en_recv_req_body_too_big_error
                     : en_recv_res_body_too_big_error;
+                ulog(ulog_error, "client intended to send too large body:%d bytes\n",
+                    length);
+            }
+            
+            int readn = 0;
+            while (length > 0 && good) {
+                readn = length > linesize_ ? linesize_ : length;
+                good = stream_.read(line_, readn).good();
+
+                if (good && ret == en_succeed) {
+                    msg.append_content(line_, readn);
+                }
+                length -= readn;
             }
         }
+    }
+
+    if (ret != en_succeed) {
+        return ret;
     }
 
     if (!good) {

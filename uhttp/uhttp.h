@@ -104,14 +104,14 @@ private:
     std::iostream & stream_;
     uhttphandler &  handler_;
     
-    int             linesize_;
+    const int       linesize_;
     char * const    line_;
 
     bool            chunk_;
     bool            gzip_;
-    int             compress_buf_size_;
+    const int       compress_buf_size_;
     char * const    compress_buf_;
-    int             decompress_buf_size_;
+    int const       decompress_buf_size_;
     char * const    decompress_buf_;
 
     static size_t   max_content_limit_;
