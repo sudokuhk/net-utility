@@ -75,7 +75,7 @@ bool uconfig_default::load(const char * filename)
             char * begin = rbuf;
             char * end   = rbuf + rdn;
 
-            char * anno = strstr(begin, (const char *)"#");
+            char * anno = strchr(begin, '#');
             if (anno != NULL) {
                 *anno -- = '\0';
                 end = anno;
@@ -105,7 +105,7 @@ bool uconfig_default::load(const char * filename)
                 //printf("group:%s\n", begin);
                 
             } else if (pgroup != NULL) {
-                char * sep = strstr(begin, (const char *)"=");
+                char * sep = strchr(begin, '=');
                 if (sep == NULL) {
                     fprintf(stderr, "no seperate(=)! (%s:%d:%ld)\n",
                         filename, linenum, begin - rbuf);
