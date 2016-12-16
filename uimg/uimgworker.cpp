@@ -103,9 +103,16 @@ int uimgworker::onhttp(const uhttprequest & request,
         return -1;
     }
 
-    //if (response.statuscode() != 0) {
-    //    return -1;        
-    //}
+    #if 0
+    if (errcode != uhttp::en_succeed) {
+        ulog(ulog_error, "[fd:%d] error code:%d!\n", socket_.socket(), errcode);
+        response.set_statuscode(uhttp_status_ok);
+        response.set_header(uhttpresponse::HEADER_CONTENT_TYPE, "application/json");
+        response.set_content(generate_json(errcode, "", 0));
+
+        return -1;
+    }
+    #endif
 
     ulog(ulog_debug, "[fd:%d,%s] [%s %s] proxy[%s]\n", 
         socket_.socket(), clientip.c_str(), path.c_str(), request.methodname(),
@@ -225,8 +232,7 @@ int uimgworker::upload(const uhttprequest & request,
     
     if (request.method() == uhttp_method_post) {
         do {
-            if (config_.limitsize > 0 && 
-                (int)request.content().size() > config_.limitsize) {
+            if (errcode == uhttp::en_recv_req_body_too_big_error) {
                 fsize   = (int)request.content().size();
                 result  = en_post_file_too_big;
                 break;
@@ -269,22 +275,29 @@ int uimgworker::upload(const uhttprequest & request,
 
                 result = en_post_body_error;
                 uboundaryparser parser;
-                std::vector<uboundaryparser::uboundaryinfo> info;
-                if (parser.parse(request.content(), boundary.c_str(), info)) {
-                    ulog(ulog_info, "uboundaryparser ok!, output:%ld\n", info.size());
+                std::vector<uboundaryparser::uboundaryinfo> infos;
+                if (parser.parse(request.content(), boundary.c_str(), infos)) {
+                    ulog(ulog_info, "uboundaryparser parse output:%ld\n", infos.size());
                     
-                    for (size_t i = 0; i < info.size(); i++) {
-                        
-                        md5_.reset();
-                        md5_.update(info[i].data, info[i].len);
-                        
-                        md5     = md5_.toString();
-                        fsize   = info[i].len;
+                    //for (size_t i = 0; i < info.size(); i++) {
+                    if (infos.size() > 0) {
+                        uboundaryparser::uboundaryinfo & info = infos[0];
+                        ulog(ulog_debug, "boundary type:%s\n", info.type.c_str()); 
 
-                        if (io_.save(md5, info[i].data, info[i].len) == 0) {
-                            result = en_post_succeed;
+                        if (allowtype(info.type.c_str())) {
+                            md5_.reset();
+                            md5_.update(info.data, info.len);
+                            
+                            md5     = md5_.toString();
+                            fsize   = info.len;
+
+                            if (io_.save(md5, info.data, info.len) == 0) {
+                                result = en_post_succeed;
+                            } else {
+                                result  = en_post_internal_error;
+                            }
                         } else {
-                            result  = en_post_internal_error;
+                            result = en_post_file_type_not_support;
                         }
                         /*if (io_.save(md5, info[i].data, info[i].len) == 0) {
                             response.append_content("<h1>MD5: ");
@@ -304,6 +317,11 @@ int uimgworker::upload(const uhttprequest & request,
                     break;
                 }
             } else { //binary.
+                if (!allowtype(ptype)) {
+                    result = en_post_file_type_not_support;
+                    break;
+                }
+                
                 const std::string & data = request.content();
 
                 ulog(ulog_debug, "upload, binary. size:%ld!\n", data.size());
@@ -427,7 +445,7 @@ std::string uimgworker::generate_json(int ret,
     cJSON_AddNumberToObject(j_ret, "ret", ret);
     cJSON_AddStringToObject(j_ret, "md5", 
         ret == en_post_succeed ? md5.c_str() : "");
-    cJSON_AddNumberToObject(j_ret, "size", upsize);
+    cJSON_AddNumberToObject(j_ret, "size", ret == 0 ? upsize : -1);
     cJSON_AddStringToObject(j_ret, "message", s_post_errors[ret]);
         
     char * pjson = cJSON_PrintUnformatted(j_ret);
@@ -441,3 +459,20 @@ std::string uimgworker::generate_json(int ret,
     return jsonstr;
 }
 
+bool uimgworker::allowtype(const char * type)
+{
+    if (type == NULL) {
+        return false;
+    }
+
+    const char * sep = strchr(type, '/');
+    if (sep == NULL) {
+        return false;
+    }
+    
+    std::string stype(sep + 1);
+    ulog(ulog_debug, "subtype:%s\n", stype.c_str());
+
+    return config_.allowall || 
+        config_.allowtypes.find(stype) != config_.allowtypes.end();
+}

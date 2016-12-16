@@ -24,14 +24,14 @@
 uimg_server * uimg_server::sinstance = NULL;
 
 const char * title = 
-"         _    _  _____  __  __   _____ \n"
-"        | |  | ||_   _||  \\/  | / ____|\n"
-"        | |  | |  | |  | \\  / || |  __ \n"
-"        | |  | |  | |  | |\\/| || | |_ |\n"
-"        | |__| | _| |_ | |  | || |__| |\n"
-"         \\____/ |_____||_|  |_| \\_____|\n"
-"                                       \n"
-"   Copyright (c) 2016-2016 sudoku.huang@gmail.com\n";
+"         _    _  _____  __  __   _____             \n"
+"        | |  | ||_   _||  \\/  | / ____|           \n"
+"        | |  | |  | |  | \\  / || |  __            \n"
+"        | |  | |  | |  | |\\/| || | |_ |           \n"
+"        | |__| | _| |_ | |  | || |__| |            \n"
+"         \\____/ |_____||_|  |_| \\_____|          \n"
+"                                                   \n"
+"   Copyright (c) 2016-2016 sudoku.huang@gmail.com  \n";
 
 void uimg_server::uimg_log_hook(int level, const char * fmt, va_list valist)
 {

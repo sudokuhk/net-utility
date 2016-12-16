@@ -19,6 +19,7 @@
 #include <uconfig/uconfig.h>
 #include <ulog/ulog.h>
 #include <utools/ufs.h>
+#include <utools/ustring.h>
 
 #define MAJOR   0
 #define MINOR   0
@@ -147,6 +148,22 @@ bool load_config(const std::string & file, uimg_conf_t & config)
         config.deamon = 0;
         if ((value = pconfig->get_string("uimg", "deamon")) != NULL) {
             config.deamon = atoi(value) == 0 ? 0 : 1;
+        }
+
+        config.allowall     = true;
+        config.allowtypes.clear();
+        if ((value = pconfig->get_string("uimg", "allowtypes")) != NULL) {
+            std::vector<std::string> out;
+            split(value, ',', out);
+
+            size_t allown = out.size();
+            if (allown > 0) {
+                config.allowall = false;
+                for (size_t i = 0; i < allown; i++) {
+                    //printf("allowtype:%s\n", out[i].c_str());
+                    config.allowtypes.insert(out[i]);
+                }
+            }
         }
     } while (0);
 

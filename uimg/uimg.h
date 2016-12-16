@@ -13,6 +13,7 @@
 #include <time.h>
 #include <vector>
 #include <map>
+#include <set>
 
 typedef struct uimg_conf
 {
@@ -24,6 +25,8 @@ typedef struct uimg_conf
     int             deamon;
     std::string     root_path;
     int             limitsize;
+    std::set<std::string>   allowtypes;
+    bool            allowall;
 
     //log
     int             log_level;

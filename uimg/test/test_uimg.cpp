@@ -48,6 +48,15 @@ public:
         request.set_method(uhttp_method_post);
         request.set_uri("/upload");
         request.set_header(uhttpmessage::HEADER_CONTENT_TYPE, "image/jpeg");
+        request.set_header("HOST", "192.168.124.128");
+        request.set_header("User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36");
+        request.set_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+        request.set_header("Connection", "keep-alive");
+        request.set_header("Upgrade-Insecure-Requests", "1");
+        request.set_header("Cache-Control", "max-age=0");
+        request.set_header("Accept-Encoding", "gzip, deflate");
+        request.set_header("Accept-Language", "zh-CN,zh;q=0.8,en;q=0.6");
+        request.set_header("DNT", "1");
 
         request.set_content(data);
         http.send_request(request);

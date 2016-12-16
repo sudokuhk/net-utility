@@ -61,6 +61,8 @@ private:
     
     std::string generate_json(int ret, const std::string & md5, int upsize);
 
+    bool allowtype(const char * type);
+    
 private:
     enum en_post_result
     {

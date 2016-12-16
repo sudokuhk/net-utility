@@ -110,6 +110,7 @@ CONFIG_SRCS :=	\
 FS_SRCS := \
 	../utools/ufs.cpp	\
 	../utools/umd5sum.cpp	\
+	../utools/ustring.cpp	\
 
 NET_SRCS := \
 		$(wildcard ../unetwork/*.cpp) 	\
