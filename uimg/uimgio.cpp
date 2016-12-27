@@ -32,7 +32,8 @@ uimgio::uimgio(const std::string & rootpath, int pathdepth, int spathsize)
         pathdepth_ = DEFAULT_PATH_DEPTH;
     }
 
-    while (pathdepth_ * pathsize_ > MD5_LEN) pathsize_--;
+    while (pathdepth_ * pathsize_ > MD5_LEN) 
+        pathsize_--;
 }
 
 uimgio::~uimgio()

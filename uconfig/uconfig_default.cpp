@@ -76,6 +76,11 @@ bool uconfig_default::load(const char * filename)
             char * end   = rbuf + rdn;
 
             char * anno = strchr(begin, '#');
+
+            if (anno == begin) {
+                continue;
+            }
+            
             if (anno != NULL) {
                 *anno -- = '\0';
                 end = anno;
