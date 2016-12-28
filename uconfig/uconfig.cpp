@@ -60,3 +60,15 @@ const char * uconfig::get_string(const char * group, const char * name) const
     
     return value;
 }
+
+uconfig::group_map_t uconfig::get_group(const char * group) const
+{
+    group_map_t groupmap;
+    if (group != NULL) {
+        config_map_t::const_iterator config_it = config_.find(group);
+        if (config_it != config_.end()) {
+            groupmap = config_it->second;
+        }
+    }
+    return groupmap;
+}

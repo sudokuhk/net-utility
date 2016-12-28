@@ -21,6 +21,9 @@ public:
     };
 
     static uconfig * create(en_uconfig_type type = en_default);
+
+    typedef std::map<std::string, std::string> group_map_t;
+    typedef std::map<std::string, group_map_t> config_map_t;
     
 public:
     uconfig();
@@ -31,12 +34,10 @@ public:
 
     const char * get_string(const char * group, const char * name) const;
 
+    group_map_t  get_group(const char * group) const;
+    
 public:
     virtual bool load(const char * filename) = 0;
-
-protected:
-    typedef std::map<std::string, std::string> group_map_t;
-    typedef std::map<std::string, group_map_t> config_map_t;
 
     config_map_t config_;
 };
