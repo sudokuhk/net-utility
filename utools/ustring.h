@@ -27,4 +27,7 @@ void trimright(const char * & left, const char * & right);
 void trim(const char * & left, const char * & right);
 void set(char * const p, char v);
 
+unsigned int str2ip(const char * ip);
+std::string ip2str(unsigned int ip);
+
 #endif

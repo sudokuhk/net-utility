@@ -7,6 +7,7 @@
 
 #include "ustring.h"
 #include <string.h>
+#include <stdio.h>
 
 void split(const char * str, char sep, std::vector<std::string> & out)
 {
@@ -63,5 +64,34 @@ void trim(const char * & left, const char * & right)
 void set(char * const p, char v)
 {
     *p = v;
+}
+
+unsigned int str2ip(const char * ip)
+{
+    if (ip == NULL) {
+        return 0;
+    }
+    
+    unsigned int num[4];
+    unsigned int ret = 0;
+    int cnt = sscanf(ip, "%d.%d.%d.%d", &num[0], &num[1], &num[2], &num[3]);
+
+    if (cnt == 4) {
+        ret = ret | (num[0] << 24) | (num[1] << 16) | (num[2] << 8) | (num[3]);
+    }
+
+    return ret;
+}
+
+std::string ip2str(unsigned int ip)
+{
+    char buf[64];
+    snprintf(buf, 64, "%d.%d.%d.%d",
+        (ip >> 24) & 0xFF,
+        (ip >> 16) & 0xFF,
+        (ip >> 8) & 0xFF,
+        (ip >> 0) & 0xFF);
+
+    return buf;
 }
 
