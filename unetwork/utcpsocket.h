@@ -6,13 +6,6 @@
 
 #include <sys/epoll.h>
 
-enum 
-{
-    en_socket_refused = -1,
-    en_socket_timeout = -300,
-    en_socket_normal_closed = -301,
-};
-
 class uschedule;
 
 class utcpsocket 
@@ -31,9 +24,7 @@ public:
 
 	virtual bool set_timeout(int ms);
 
-	virtual int last_error();
-
-    struct epoll_event & event()    { return event_;    }
+	virtual int last_error();    
 
     void set_errno(int no)  { errno_ = no; }
 
@@ -43,10 +34,11 @@ public:
     
   	virtual int socket();
 
+    struct epoll_event & event()    { return event_;    }
+
 private:
     bool setnonblock(bool nonblock);
     bool setnodelay(bool nodelay);
-
 private:
 	uschedule * schedule_;
     struct epoll_event event_;
@@ -55,6 +47,7 @@ private:
 	int connect_timeo_;
 	int socket_timeo_;
     int errno_;
+    bool close_when_destroy_;
 };
 
 #endif

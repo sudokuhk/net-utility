@@ -12,6 +12,14 @@ class uruntime;
 class utimermgr;
 class utcpsocket;
 class utimer;
+class uudpsocket;
+
+enum 
+{
+    en_socket_refused = -1,
+    en_socket_timeout = -300,
+    en_socket_normal_closed = -301,
+};
 
 enum 
 {
@@ -93,6 +101,13 @@ public:
     ssize_t read(utcpsocket * socket, void * buf, size_t len, int flags);
     ssize_t recv(utcpsocket * socket, void * buf, size_t len, int flags);
     ssize_t send(utcpsocket * socket, const void * buf, size_t len, int flags);
+
+    int poll(uudpsocket * socket, int events, int timeo);
+    #ifdef UUDP_STREAM
+    ssize_t read(uudpsocket * socket, void * buf, size_t len, int flags);
+    ssize_t recv(uudpsocket * socket, void * buf, size_t len, int flags);
+    #endif
+    
     void wait(utimer * timer, int waitms);
     
 private:

@@ -61,6 +61,7 @@ utcpsocket::utcpsocket(size_t buf_size, int sockfd,
     , connect_timeo_(connect_timeo)
     , socket_timeo_(socket_timeo)
     , errno_(0)
+    , close_when_destroy_(true)
 {
     setnonblock(nonblock);
     setnodelay(no_delay);
@@ -73,6 +74,10 @@ utcpsocket::utcpsocket(size_t buf_size, int sockfd,
 
 utcpsocket::~utcpsocket()
 {
+    if (close_when_destroy_ && socket_fd_ > 0) {
+        close(socket_fd_);
+        socket_fd_ = -1;
+    }
 }
 
 bool utcpsocket::set_timeout(int ms)
@@ -105,9 +110,9 @@ bool utcpsocket::setnonblock(bool nonblock)
 
     int tmp = fcntl(socket_fd_, F_GETFL, 0);
 
-    if (nonblock) {
+    if (nonblock && ((tmp & O_NONBLOCK) == 0)) {
         ret = fcntl(socket_fd_, F_SETFL, tmp | O_NONBLOCK);
-    } else {
+    } else if (!nonblock && ((tmp & O_NONBLOCK) != 0)) {
         ret = fcntl(socket_fd_, F_SETFL, tmp & (~O_NONBLOCK));
     }
 

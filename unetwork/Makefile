@@ -12,8 +12,8 @@ PROFILE        := NO
 # will not be used. YES will include the STL files.
 USE_STL := YES
 
-# WIN32_ENV
-WIN32_ENV := YES 
+USE_UDP_STREASM := NO
+//USE_UDP_STREASM := YES
 #****************************************************************************
 
 CC     := gcc
@@ -59,10 +59,13 @@ endif
 #****************************************************************************
 
 ifeq (YES, ${USE_STL})
-  #DEFS := -DUSE_STL -DUSE_DB_POSTGRESQL
   DEFS := -DUSE_STL
 else
   DEFS :=
+endif
+
+ifeq (YES, ${USE_UDP_STREASM})
+  DEFS += -DUUDP_STREAM
 endif
 
 #****************************************************************************
@@ -94,7 +97,7 @@ LIBS += $(patsubst %, -l%, $(LIBRARYS))
 # Targets of the build
 #****************************************************************************
 
-OUTPUT := libunetwork.so 
+OUTPUT := libunetwork.so
 
 #****************************************************************************
 # Source files
@@ -105,6 +108,7 @@ SRCS := \
 		./utimer.cpp \
 		./utcpstreambuf.cpp	\
 		./utcpsocket.cpp	\
+		./uudpsocket.cpp	\
 
 DEP_SOURCES = $(notdir $(SRCS))
 OUTPUT_DEP_OBJS = $(patsubst %.cpp,%.o, $(DEP_SOURCES))

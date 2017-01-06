@@ -1,5 +1,6 @@
 #include "uschedule.h"
 #include "utcpsocket.h"
+#include "uudpsocket.h"
 #include "utimer.h"
 
 #include "uthread/uruntime.h"
@@ -144,12 +145,12 @@ bool uschedule::run()
         //printf("epoll fds:%d\n", nfds);
         if (nfds >= 0) {
             for (int i = 0; i < nfds; i++) {
-                utcpsocket * socket = (utcpsocket *)events[i].data.ptr;
-                socket->waited_events() = events[i].events;
+                utimer * psocket = (utimer *)events[i].data.ptr;
+                psocket->waited_events() = events[i].events;
                 //printf("epoll event, fd:%d, event:%d!\n", 
                 //    socket->socket(), events[i].events);
 
-                runtime_->resume(socket->thread());
+                runtime_->resume(psocket->thread());
             }
 
             if (stop_) {
@@ -221,7 +222,7 @@ void uschedule::resume_all(int reason)
     }
 }
 
-///////////////////////////////////////////
+///////////////////tcp utility////////////////////////
 int uschedule::poll(utcpsocket * socket, int events, int timeo)
 {
     int ret = -1;
@@ -345,6 +346,83 @@ ssize_t uschedule::send(utcpsocket * socket,
 
     return ret;
 }
+
+///////////////////udp utility////////////////////////
+int uschedule::poll(uudpsocket * socket, int events, int timeo)
+{
+    int ret = -1;
+    int errno_ = 0;
+    
+    socket->thread() = runtime_->current();
+    socket->event().events = events;
+    
+    timermgr_->add(timeo, socket);
+    epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket->socket(), &socket->event());
+
+    runtime_->yield();
+
+    epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, socket->socket(), &socket->event());
+    timermgr_->remove(socket);
+
+    int waited_event = socket->waited_events();
+    //socket->waited_events() = 0;
+    
+    if (waited_event > 0) {
+        if (waited_event & events) {
+            ret = 1;
+        } else {
+            errno_ = EINVAL;
+            ret = 0;
+        }
+    } else if (waited_event == en_epoll_timeout) {
+        errno_ = ETIMEDOUT;
+        ret = 0;
+    } else if (waited_event == en_epoll_error) {
+        errno_ = ECONNREFUSED;
+        ret = -1;
+    } else {
+        errno_ = 0;
+        ret = -1;
+    }
+
+    socket->set_errno(errno_);
+
+    return ret;
+}
+
+#ifdef UUDP_STREAM
+ssize_t uschedule::read(uudpsocket * socket, void * buf, size_t len, int flags)
+{
+    int ret = ::read(socket->socket(), buf, len);
+
+    if (ret < 0 && EAGAIN == errno) {
+        if (poll(socket, EPOLLIN, socket->socket_timeo()) > 0) {
+            ret = ::read(socket->socket(), buf, len);
+        } else {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+ssize_t uschedule::recv(uudpsocket * socket, void * buf, size_t len, int flags)
+{   
+    int ret = ::recv(socket->socket(), buf, len, flags);
+
+    if (ret < 0 && EAGAIN == errno) {
+        if (poll(socket, EPOLLIN, socket->socket_timeo()) > 0) {
+            ret = ::recv(socket->socket(), buf, len, flags);
+        } else {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+#else
+#endif
+//////////////////////////////////////////////////
 
 void uschedule::wait(utimer * timer, int waitms)
 {
