@@ -97,19 +97,16 @@ LIBS += $(patsubst %, -l%, $(LIBRARYS))
 # Targets of the build
 #****************************************************************************
 
-OUTPUT := libunetwork.so
+OUTPUT := libutools.so
 
 #****************************************************************************
 # Source files
 #****************************************************************************
 
 SRCS := \
-		./uschedule.cpp	\
-		./utimer.cpp \
-		./utcpstreambuf.cpp	\
-		./utcpsocket.cpp	\
-		./uudpsocket.cpp	\
-		./udnsresolver.cpp	\
+	ufs.cpp  		\
+	umd5sum.cpp  	\
+	ustring.cpp 	\
 
 DEP_SOURCES = $(notdir $(SRCS))
 OUTPUT_DEP_OBJS = $(patsubst %.cpp,%.o, $(DEP_SOURCES))

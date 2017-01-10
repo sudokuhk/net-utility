@@ -187,6 +187,13 @@ void uschedule::wake()
     tunnel_->emit();
 }
 
+void uschedule::sleep(int ms)
+{
+    utimer * t = new utimer();
+    wait(t, ms);
+    delete t;
+}
+
 void uschedule::consume_task()
 {
     lock_->lock();

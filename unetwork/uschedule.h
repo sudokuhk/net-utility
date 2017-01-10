@@ -94,6 +94,8 @@ public:
 
 	void wake();
 
+    void sleep(int ms);
+
 public:
     int poll(utcpsocket * socket, int events, int timeo);
     int accept(utcpsocket* socket, struct sockaddr* addr, socklen_t* addrlen);

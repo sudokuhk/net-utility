@@ -8,6 +8,7 @@ dirs:=	\
 	uhttp	\
 	unetwork	\
 	uthread	\
+	utools	\
 
 SUBDIRS := $(dirs)
 

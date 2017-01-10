@@ -9,7 +9,7 @@ LIBRARY = pthread
 
 INC_PATH += ../
 LIB_PATH += ../unetwork ../uhttp ../uthread
-LIBRARY  += unetwork uhttp uthread z
+LIBRARY  += unetwork uhttp uthread z utools
 
 INC_PATH := $(patsubst %, -I%, $(INC_PATH))
 LIB_PATH := $(patsubst %, -L%, $(LIB_PATH))
