@@ -28,19 +28,28 @@ std::map<std::string, std::set<udnsresolver::record_t> > udnsresolver::cache_;
 std::list<std::string> udnsresolver::server_;
 struct stat udnsresolver::sb_;
 
+#define DNS_SET_INT8(p, c)  ((*(uint8_t *)(p)) = (c))
+#define DNS_SET_INT16(p, s) ((*(uint16_t *)(p)) = (htons(s)))
+#define DNS_SET_INT32(p, n) ((*(uint32_t *)(p)) = (htonl(s)))
+
+#define DNS_GET_INT8(p)     (*(uint8_t *)(p))
+#define DNS_GET_int16(p)    (ntohs(*(uint16_t *)(p)))
+#define DNS_GET_int32(p)    (ntohl(*(uint32_t *)(p)))
+
+// net byte order!
 struct dns_proto_header
 {
     uint16_t    id;
 
-    uint8_t     rd : 1;
-    uint8_t     tc : 1;
-    uint8_t     aa : 1;
-    uint8_t     opcode : 4;
-    uint8_t     qr : 1;
+    uint8_t     rd      : 1;
+    uint8_t     tc      : 1;
+    uint8_t     aa      : 1;
+    uint8_t     opcode  : 4;
+    uint8_t     qr      : 1;
 
-    uint8_t     rcode : 4;
-    uint8_t     z : 3;
-    uint8_t     ra : 1;
+    uint8_t     rcode   : 4;
+    uint8_t     z       : 3;
+    uint8_t     ra      : 1;
 
     uint16_t    qdcount;
     uint16_t    ancount;
@@ -92,10 +101,10 @@ bool udnsresolver::send_request(const std::string & domain)
     dns_proto_header * h = (dns_proto_header *)pbuf;
     memset(h, 0, sizeof(dns_proto_header));
 
-    h->id       = time(NULL) & 0xFFFF;
+    h->id       = time(NULL) & 0xFFFF;  //randon value.
     h->rd       = 1;
-    
-    h->qdcount  = htons(1);
+
+    DNS_SET_INT16(&h->qdcount, 1);
     
     size += sizeof(dns_proto_header);
     
@@ -104,21 +113,21 @@ bool udnsresolver::send_request(const std::string & domain)
 
     for (size_t i = 0; i < vbuf.size(); i++) {
         size_t cnt = vbuf[i].size();
-        *(pbuf + size) = cnt;
+        DNS_SET_INT8(pbuf + size, cnt);
         size ++;
         
         memcpy((pbuf + size), vbuf[i].c_str(), cnt);
         size += cnt;
     }
-    *(pbuf + size) = 0;
+    DNS_SET_INT8(pbuf + size, 0);
     size ++;
 
     // qtype = ipv4
-    *(uint16_t *)(pbuf + size) = htons(1);
+    DNS_SET_INT16(pbuf + size, 1);
     size += 2;
 
     //qclass = inet
-    *(uint16_t *)(pbuf + size) = htons(1);
+    DNS_SET_INT16(pbuf + size, 1);
     size += 2;
 
     return sock_->send(pbuf, size, 0) == (ssize_t)size;
@@ -135,7 +144,7 @@ udnsresolver::iparray_type udnsresolver::recv_request(const std::string & domain
     time_t now = time(NULL);
     std::string name;
     record_t r;
-    r.query= now;
+    r.query = now;
 
     if (sock_->recv(pbuf, buf.size(), 0) > 0) {
         dns_proto_header * h = (dns_proto_header *)pbuf;
@@ -152,8 +161,15 @@ udnsresolver::iparray_type udnsresolver::recv_request(const std::string & domain
             if (h->qdcount > 0) {
                 for (uint16_t i = 0; i < h->qdcount; i++) {
                     get_name(pbuf, off, name);
-                    off += 2; //skip qtype
+                    off += 2; //skip qtypeS
                     off += 2; //skip qclass
+
+                    if (name != domain) {
+                        //printf("invalid response. name:[%s:%d], get:[%s:%d]\n",
+                        //    name.c_str(), name.size(),
+                        //    domain.c_str(), domain.size());
+                        return ips;
+                    }
                 }
             }
             
@@ -193,16 +209,19 @@ void udnsresolver::get_record(const uint8_t * pb, ssize_t & off,
 {
     get_name(pb, off, name);
 
+    //uint16_t rtype = DNS_GET_int16(pb + off);
     off += 2; // type
+    
+    //uint16_t rclass = DNS_GET_int16(pb + off);
     off += 2; // class
     
-    uint32_t ttl  = ntohl(*(uint32_t *)(pb + off));
+    uint32_t ttl  = DNS_GET_int32(pb + off); //ntohl(*(uint32_t *)(pb + off));
     off += 4; // ttl
     
     //uint16_t rdlength = ntohs(*(uint16_t *)(pb + off));
     off += 2; //rdlength
 
-    uint32_t rdata = ntohl(*(uint32_t *)(pb + off));
+    uint32_t rdata = DNS_GET_int32(pb + off); //ntohl(*(uint32_t *)(pb + off));
     off += 4;
 
     r.ip  = ip2str(rdata);
@@ -214,13 +233,17 @@ void udnsresolver::get_record(const uint8_t * pb, ssize_t & off,
 void udnsresolver::get_name(const uint8_t * pb, ssize_t & off, 
     std::string & name)
 {
+    name.clear();
+    
     uint8_t pflag = *(pb + off);
     const uint8_t * pbegin = NULL;
     bool isptr = false;
 
     if (pflag & 0xC0) { //ptr
-        uint16_t poff = ntohs(*(uint16_t *)(pb + off));
+        uint16_t poff = DNS_GET_int16(pb + off) ;//ntohs(*(uint16_t *)(pb + off));
         off += 2;
+        poff &= 0x3F;
+        
         pbegin = pb + poff;
         isptr = true;
     } else {
@@ -230,14 +253,19 @@ void udnsresolver::get_name(const uint8_t * pb, ssize_t & off,
     uint8_t size = 0;
     
     while (*pbegin != 0) {
-        size = *pbegin ++;
-        name.append((const char *)pbegin, size).append(".");
+        size = DNS_GET_INT8(pbegin);
+        pbegin ++;
+
+        name.append((const char *)pbegin, size);
         pbegin += size;
+
+        if (*pbegin != 0) {
+            name.append(".");
+        }
     }
-    name[name.size() - 1] = 0;
 
     if (!isptr) {
-        off += name.size() + 1;
+        off += name.size() + 1/*first*/ + 1/*0x00*/;
     }
 }
 
