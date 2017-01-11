@@ -59,7 +59,7 @@ public:
     
 public:
     uhttp(std::iostream & stream, uhttphandler & handler, 
-        bool gzip = true, bool chunk = false);
+        bool gzip = true, bool chunk = false, bool discard = false);
 
     virtual ~uhttp();
 
@@ -113,6 +113,8 @@ private:
     char * const    compress_buf_;
     int const       decompress_buf_size_;
     char * const    decompress_buf_;
+
+    bool            discard_;
 
     static size_t   max_content_limit_;
     static size_t   chunk_size_;

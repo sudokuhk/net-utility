@@ -106,7 +106,7 @@ const static struct sreasonphrase_t
 };
 
 uhttp::uhttp(std::iostream & stream, uhttphandler & handler, 
-    bool gzip, bool chunk)
+    bool gzip, bool chunk, bool discard)
     : stream_(stream)
     , handler_(handler)
     , linesize_(HTTP_RECV_MAXSIZE)
@@ -117,6 +117,7 @@ uhttp::uhttp(std::iostream & stream, uhttphandler & handler,
     , compress_buf_(gzip_ ? (char *)malloc(compress_buf_size_) : NULL)
     , decompress_buf_size_(HTTP_RECV_MAXSIZE)
     , decompress_buf_((char *)malloc(decompress_buf_size_))
+    , discard_(discard)
 {
 }
 
@@ -565,6 +566,10 @@ int uhttp::recv_body(uhttpmessage & msg)
                     : en_recv_res_body_too_big_error;
                 ulog(ulog_error, "client intended to send too large chunked body:"
                     "%ld+%d bytes\n", msg.content().size(), size);
+
+                if (!discard_) {
+                    break;
+                }
             }
             
             int readn = 0;
@@ -598,16 +603,18 @@ int uhttp::recv_body(uhttpmessage & msg)
                 ulog(ulog_error, "client intended to send too large body:%d bytes\n",
                     length);
             }
-            
-            int readn = 0;
-            while (length > 0 && good) {
-                readn = length > linesize_ ? linesize_ : length;
-                good = stream_.read(line_, readn).good();
 
-                if (good && ret == en_succeed) {
-                    msg.append_content(line_, readn);
+            if (ret == en_succeed || (ret != en_succeed && !discard_)) {
+                int readn = 0;
+                while (length > 0 && good) {
+                    readn = length > linesize_ ? linesize_ : length;
+                    good = stream_.read(line_, readn).good();
+
+                    if (good && ret == en_succeed) {
+                        msg.append_content(line_, readn);
+                    }
+                    length -= readn;
                 }
-                length -= readn;
             }
         }
     }
