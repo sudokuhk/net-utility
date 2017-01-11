@@ -80,6 +80,7 @@ uschedule::uschedule(size_t stacksize, int maxtask,
     , timermgr_(new utimermgr())
     , tunnel_(new utunnel(*this))
     , lock_(lock)
+    , sleeper_(new utimer())
     , epoll_fd_(-1)
     , max_task_(maxtask)
     , running_(false)
@@ -104,6 +105,7 @@ uschedule::~uschedule()
     delete runtime_;
     delete timermgr_;
     delete tunnel_;
+    delete sleeper_;
 }
 
 void uschedule::add_task(utask * task)
@@ -145,12 +147,12 @@ bool uschedule::run()
         //printf("epoll fds:%d\n", nfds);
         if (nfds >= 0) {
             for (int i = 0; i < nfds; i++) {
-                utimer * psocket = (utimer *)events[i].data.ptr;
-                psocket->waited_events() = events[i].events;
-                //printf("epoll event, fd:%d, event:%d!\n", 
-                //    socket->socket(), events[i].events);
+                utimer * ptimer = (utimer *)events[i].data.ptr;
+                ptimer->waited_events() = events[i].events;
+                //printf("epoll event, event:%d, thread:%d, %p!\n",
+                //    events[i].events, ptimer->thread(), ptimer);
 
-                runtime_->resume(psocket->thread());
+                runtime_->resume(ptimer->thread());
             }
 
             if (stop_) {
@@ -189,9 +191,7 @@ void uschedule::wake()
 
 void uschedule::sleep(int ms)
 {
-    utimer * t = new utimer();
-    wait(t, ms);
-    delete t;
+    wait(sleeper_, ms);
 }
 
 void uschedule::consume_task()

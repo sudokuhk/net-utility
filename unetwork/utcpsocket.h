@@ -9,8 +9,8 @@
 class uschedule;
 
 class utcpsocket 
-    : public basic_tcp_stream
-    , public utimer
+    : public utimer
+    , public basic_tcp_stream
 {
 public:
     static int connect(const char * host, int port);

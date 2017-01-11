@@ -55,7 +55,8 @@ int utcpsocket::connect(const char * host, int port)
 utcpsocket::utcpsocket(size_t buf_size, int sockfd,
     uschedule * sched, bool nonblock, 
     int socket_timeo, int connect_timeo, bool no_delay)
-    : basic_tcp_stream(buf_size)
+    : utimer()
+    , basic_tcp_stream(buf_size)
     , schedule_(sched)
     , socket_fd_(sockfd)
     , connect_timeo_(connect_timeo)

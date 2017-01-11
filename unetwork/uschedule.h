@@ -122,7 +122,7 @@ private:
     utimermgr * timermgr_;
     utunnel *   tunnel_;
     ulock *     lock_;
-        
+    utimer *    sleeper_;
 	int epoll_fd_;
 	int max_task_;
 	bool running_;
