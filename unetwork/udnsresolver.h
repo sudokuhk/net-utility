@@ -63,9 +63,10 @@ public:
 private:
     bool send_request(const std::string & domain);
     iparray_type recv_request(const std::string & domain);
-    void get_record(const uint8_t * pb, ssize_t & off, 
+    int get_record(const uint8_t * pb, ssize_t & off, 
         std::string & name, record_t & info);
     void get_name(const uint8_t * pb, ssize_t & off, std::string & name);
+    void get_name(const uint8_t * pb, int len, std::string & name);
     
 private:
     uschedule & sched_;

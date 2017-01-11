@@ -25,14 +25,14 @@ public:
     virtual void run()
     {
         std::vector<std::string> res = resolver.query(host_);
-        printf("result[%u]\n", res.size());
+        printf("result[%lu]\n", res.size());
         for (size_t i = 0; i < res.size(); i++) {
             printf("%s\n", res[i].c_str());
         }
         printf("---------\n");
         
         res = resolver.query(host_);
-        printf("result[%u]\n", res.size());
+        printf("result[%lu]\n", res.size());
         for (size_t i = 0; i < res.size(); i++) {
             printf("%s\n", res[i].c_str());
         }
@@ -41,7 +41,7 @@ public:
         sched_.sleep(6 * 1000);
         
         res = resolver.query(host_);
-        printf("result[%u]\n", res.size());
+        printf("result[%lu]\n", res.size());
         for (size_t i = 0; i < res.size(); i++) {
             printf("%s\n", res[i].c_str());
         }
@@ -49,7 +49,7 @@ public:
 
         sched_.sleep(4 * 1000);
         res = resolver.query(host_);
-        printf("result[%u]\n", res.size());
+        printf("result[%lu]\n", res.size());
         for (size_t i = 0; i < res.size(); i++) {
             printf("%s\n", res[i].c_str());
         }
@@ -92,7 +92,7 @@ int main(int argc, char * argv[])
     
     uschedule schedule(1024, 100, true, NULL);
     
-    mytask task(schedule, host, timeo);
+    mytask task(schedule, host, timeo * 1000);
     schedule.add_task(&task);
     schedule.run();
 

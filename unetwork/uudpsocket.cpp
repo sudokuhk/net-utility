@@ -295,7 +295,7 @@ ssize_t uudpsocket::recv(void *buf, size_t len, int flags)
     if (sock_ < 0) {
         return -1;
     }
-    
+
     ssize_t ret = ::recv(sock_, buf, len, flags);
     if (ret < 0 && EAGAIN == errno) {
         if (sched_.poll(this, EPOLLIN, timeo_) > 0) {

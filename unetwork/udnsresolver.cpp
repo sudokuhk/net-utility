@@ -36,6 +36,18 @@ struct stat udnsresolver::sb_;
 #define DNS_GET_int16(p)    (ntohs(*(uint16_t *)(p)))
 #define DNS_GET_int32(p)    (ntohl(*(uint32_t *)(p)))
 
+#define TYPE_A          1   //ipv4 address
+#define TYPE_NS         2   //name server
+#define TYPE_CNAME      5   //alias
+#define TYPE_SOA        6   
+#define TYPE_WKS        11
+#define TYPE_PTR        12
+#define TYPE_HINFO      13
+#define TYPE_MX         15  
+#define TYPE_AAAA       28  //ipv6
+#define TYPE_AXFR       252
+#define TYPE_ANY        255
+
 // net byte order!
 struct dns_proto_header
 {
@@ -60,7 +72,8 @@ struct dns_proto_header
 udnsresolver::udnsresolver(uschedule & sched, int timeo)
     //: utask()
     : sched_(sched)
-    , sock_(new uudpsocket(sched_, timeo_))
+    , sock_(new uudpsocket(sched_, timeo))
+    , timeo_(timeo)
     //, cache_()
     //, cb_()
 {
@@ -84,7 +97,7 @@ udnsresolver::iparray_type udnsresolver::query(const std::string & domain)
 
         if (send_request(domain)) {
             ips = recv_request(domain);
-        }
+        } 
     }
     //get_cache(domain, ips);
 
@@ -146,7 +159,9 @@ udnsresolver::iparray_type udnsresolver::recv_request(const std::string & domain
     record_t r;
     r.query = now;
 
-    if (sock_->recv(pbuf, buf.size(), 0) > 0) {
+    off = sock_->recv(pbuf, buf.size(), 0);
+    if (off > 0) {
+        off = 0;
         dns_proto_header * h = (dns_proto_header *)pbuf;
         off += sizeof(dns_proto_header);
 
@@ -175,25 +190,28 @@ udnsresolver::iparray_type udnsresolver::recv_request(const std::string & domain
             
             if (h->ancount > 0) {
                 for (uint16_t i = 0; i < h->ancount; i++) {
-                    get_record(pbuf, off, name, r);
-                    result.insert(r);
-                    ips.push_back(r.ip);
+                    if (get_record(pbuf, off, name, r) == TYPE_A) {
+                        result.insert(r);
+                        ips.push_back(r.ip);
+                    }
                 }
             }
 
             if (h->nscount > 0) {
                 for (uint16_t i = 0; i < h->nscount; i++) {
-                    get_record(pbuf, off, name, r);
-                    result.insert(r);
-                    ips.push_back(r.ip);
+                    if (get_record(pbuf, off, name, r) == TYPE_A) {
+                        result.insert(r);
+                        ips.push_back(r.ip);
+                    }
                 }
             }
 
             if (h->arcount > 0) {
                 for (uint16_t i = 0; i < h->arcount; i++) {
-                    get_record(pbuf, off, name, r);
-                    result.insert(r);
-                    ips.push_back(r.ip);
+                    if (get_record(pbuf, off, name, r) == TYPE_A) {
+                        result.insert(r);
+                        ips.push_back(r.ip);
+                    }
                 }
             }
 			
@@ -204,12 +222,12 @@ udnsresolver::iparray_type udnsresolver::recv_request(const std::string & domain
     return ips;
 }
 
-void udnsresolver::get_record(const uint8_t * pb, ssize_t & off, 
+int udnsresolver::get_record(const uint8_t * pb, ssize_t & off, 
         std::string & name, record_t & r)
 {
     get_name(pb, off, name);
 
-    //uint16_t rtype = DNS_GET_int16(pb + off);
+    uint16_t rtype = DNS_GET_int16(pb + off);
     off += 2; // type
     
     //uint16_t rclass = DNS_GET_int16(pb + off);
@@ -218,16 +236,39 @@ void udnsresolver::get_record(const uint8_t * pb, ssize_t & off,
     uint32_t ttl  = DNS_GET_int32(pb + off); //ntohl(*(uint32_t *)(pb + off));
     off += 4; // ttl
     
-    //uint16_t rdlength = ntohs(*(uint16_t *)(pb + off));
+    uint16_t rdlength = ntohs(*(uint16_t *)(pb + off));
     off += 2; //rdlength
 
-    uint32_t rdata = DNS_GET_int32(pb + off); //ntohl(*(uint32_t *)(pb + off));
-    off += 4;
-
-    r.ip  = ip2str(rdata);
+    if (rtype == TYPE_A) {
+        uint32_t rdata = DNS_GET_int32(pb + off); 
+        off += 4;
+        r.ip  = ip2str(rdata);
+    } else {
+        get_name(pb + off, rdlength, r.ip);
+        off += rdlength;
+    }
     r.ttl = ttl;
 
     //printf("get [%s] ip[%s] ttl[%u]\n", name.c_str(), r.ip.c_str(), r.ttl);
+    return rtype;
+}
+
+void udnsresolver::get_name(const uint8_t * pb, int len, std::string & name)
+{
+    name.clear();
+
+    const uint8_t * b = pb;
+    const uint8_t * e = pb + len -1;
+    int size = 0;
+    
+    while (b < e && (size = *b ++)) {
+        name.append((const char *)b, size);
+        b += size;
+
+        if (b != e) {
+            name.append(".");
+        }
+    }
 }
 
 void udnsresolver::get_name(const uint8_t * pb, ssize_t & off, 
