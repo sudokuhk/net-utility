@@ -141,12 +141,22 @@ bool uhttpmessage::keep_alive() const
     const char * proxy = get_header(HEADER_PROXY_CONNECTION);
     const char * local = get_header(HEADER_CONNECTION);
 
-    if ((NULL != proxy && 0 == strcasecmp(proxy, HEADER_KEEPALIVE))
-            || (NULL != local && 0 == strcasecmp(local, HEADER_KEEPALIVE))) {
+    if ((NULL != local && 0 == strcasecmp(local, HEADER_KEEPALIVE)) ||
+        (NULL != proxy && 0 == strcasecmp(proxy, HEADER_KEEPALIVE)) ||
+        (local == NULL && proxy == NULL && version() == uhttp_version_1_1)) {
         ret = true;
     }
 
     return ret;
+}
+
+void uhttpmessage::set_keepalive(bool keep)
+{
+    if (keep) {
+        set_header(HEADER_CONNECTION, HEADER_KEEPALIVE);
+    } else {
+        set_header(HEADER_CONNECTION, "close");
+    }
 }
 
 void uhttpmessage::append_content(const std::string & content)
@@ -198,5 +208,6 @@ void uhttpmessage::clear()
 {
     content_.clear();
     header_.clear();
-    version_ = uhttp_version_1_0;
+    
+    set_version(uhttp_version_1_1);
 }

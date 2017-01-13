@@ -45,6 +45,7 @@ public:
     void output_header(std::ostream & stream, const char * name = NULL);
 
     bool keep_alive() const;
+    void set_keepalive(bool keep);
 
     void append_content(const std::string & content);
     void append_content(const char * content, int length);

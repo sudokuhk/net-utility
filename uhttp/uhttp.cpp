@@ -155,22 +155,28 @@ void uhttp::run()
         alive = request.keep_alive();
         //request.output_header(std::cout);
 
-        if (!stream_.good()) {
-            result = en_socket_reset;
-        }
-        handler_res = handler_.onhttp(request, response, result);
-
         //network down, callback return, break loop.
-        if (result == en_socket_reset) {
+        if (!stream_.good()) {
+            ulog(ulog_debug, "[%s:%d] socket error!\n", __FUNCTION__, __LINE__);
+            result = en_socket_reset;
             break;
         }
+        
+        handler_res = handler_.onhttp(request, response, result);
 
+        if (request.version() == uhttp_version_1_0) {
+            response.set_version(uhttp_version_1_0);
+        }
+        
         if (request.version() == uhttp_version_1_0 ||
             response.version() == uhttp_version_1_0 ||
             !request.keep_alive() || 
             !response.keep_alive()) { //  ||
             //response.statuscode() != uhttp_status_ok) {
+            ulog(ulog_debug, "[%s:%d] disconnect after send!\n",
+                __FUNCTION__, __LINE__);
             response.set_header(uhttpresponse::HEADER_CONNECTION, "close");
+            alive = false;
         }
 
         if (response.get_header(uhttpmessage::HEADER_DATE) == NULL) {
@@ -193,6 +199,13 @@ void uhttp::run()
                 result = en_socket_reset;
             }
             
+            break;
+        }
+
+        // http 1.0 or connection close, close active.
+        // maybe need to wait a monent, to check it client close it.
+        // TODO::  @20170113
+        if (!alive) {
             break;
         }
 
@@ -229,16 +242,16 @@ int uhttp::send_request(uhttprequest & request)
             << sversions[request.version()]
             << UHTTP_LINE_END; 
 
-    if (!stream_.flush().good()) {
-        return en_send_req_start_error;
-    }
+    //if (!stream_.flush().good()) {
+    //    return en_send_req_start_error;
+    //}
     
     request.output_header(stream_);
     stream_ << UHTTP_LINE_END;
 
-    if (!stream_.flush().good()) {
-        return en_send_req_header_error;
-    }
+    //if (!stream_.flush().good()) {
+    //    return en_send_req_header_error;
+    //}
     
     if (!content.empty()) {
         if (chunk_ && content.size() > chunk_size_) {
@@ -293,17 +306,17 @@ int uhttp::send_response(uhttpresponse & response)
             << get_reasonphrase(response.statuscode())
             << UHTTP_LINE_END;
 
-    if (!stream_.flush().good()) {
-        return en_send_res_start_error;
-    }
+    //if (!stream_.flush().good()) {
+    //    return en_send_res_start_error;
+    //}
 
     //response.output_header(std::cout);
     response.output_header(stream_);
     stream_ << UHTTP_LINE_END;
 
-    if (!stream_.flush().good()) {
-        return en_send_req_header_error;
-    }
+    //if (!stream_.flush().good()) {
+    //    return en_send_req_header_error;
+    //}
 
     if (!content.empty()) {
         if (chunk_ && content.size() > chunk_size_) {
