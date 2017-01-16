@@ -98,7 +98,8 @@ public:
 
 public:
     int poll(utcpsocket * socket, int events, int timeo);
-    int accept(utcpsocket* socket, struct sockaddr* addr, socklen_t* addrlen);
+    int accept(utcpsocket* socket, struct sockaddr* addr, 
+        socklen_t* addrlen, int timeo);
     int connect(utcpsocket* socket, struct sockaddr* addr, socklen_t addrlen);
     ssize_t read(utcpsocket * socket, void * buf, size_t len, int flags);
     ssize_t recv(utcpsocket * socket, void * buf, size_t len, int flags);

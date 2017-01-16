@@ -191,7 +191,9 @@ void uschedule::wake()
 
 void uschedule::sleep(int ms)
 {
-    wait(sleeper_, ms);
+    utimer * t = new utimer();
+    wait(t, ms);
+    delete t;
 }
 
 void uschedule::consume_task()
@@ -272,17 +274,19 @@ int uschedule::poll(utcpsocket * socket, int events, int timeo)
     return ret;
 }
 
-int uschedule::accept(utcpsocket * socket, struct sockaddr * addr, 
-    socklen_t * addrlen)
+int uschedule::accept(utcpsocket* socket, struct sockaddr* addr, 
+    socklen_t* addrlen, int timeo)
 {
     int ret = -1;
 
     ret = ::accept(socket->socket(), addr, addrlen);
     if (ret < 0) {
         if (EAGAIN == errno || EWOULDBLOCK == errno) {
-            if (poll(socket, EPOLLIN, -1) > 0) {
+            ret = poll(socket, EPOLLIN, timeo);
+
+            if (ret > 0) {
                 ret = ::accept(socket->socket(), addr, addrlen);
-            }
+            } 
         }
     }
 
@@ -297,7 +301,7 @@ int uschedule::connect(utcpsocket * socket, struct sockaddr * addr,
     ret = ::connect(socket->socket(), addr, addrlen);
     if (ret < 0) {
         if (EAGAIN == errno || EINPROGRESS == errno) {
-            if (poll(socket, EPOLLIN, -1) > 0) {
+            if (poll(socket, EPOLLIN, socket->connect_timeo()) > 0) {
                 ret = 0;
             }
         }

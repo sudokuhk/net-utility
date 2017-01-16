@@ -2,6 +2,7 @@
 
 #include "utcpstreambuf.h"
 #include "uschedule.h"
+#include "utools/ustring.h"
 
 #include <errno.h>
 #include <sys/types.h>
@@ -10,47 +11,6 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <stdio.h>
-
-int utcpsocket::connect(const char * host, int port)
-{
-    if (host == NULL || port == 0) {
-        return -1;
-    }
-    //printf("connect to, host:%s, port:%d\n", host, port);
-
-    struct addrinfo *result, hint;
-
-    memset(&hint, 0, sizeof(hint));
-    hint.ai_family   = AF_INET;
-    hint.ai_socktype = SOCK_STREAM;
-
-    if (getaddrinfo(host, NULL, &hint, &result) < 0) {
-        return -1;
-    }
-
-    struct sockaddr_in in_addr = *(struct sockaddr_in *)result->ai_addr;
-    freeaddrinfo(result);
-    
-    int sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (sock  > 0) {
-        //struct sockaddr_in in_addr;
-        //memset(&in_addr, 0, sizeof(in_addr));
-
-        in_addr.sin_family = AF_INET;
-        //in_addr.sin_addr.s_addr = inet_addr(host);
-        in_addr.sin_port = htons(port);
-
-        if (::connect(sock , (struct sockaddr*) &in_addr, 
-            sizeof(in_addr)) == 0) {
-            return sock;
-        }
-    }
-
-    if (sock > 0) {
-        close(sock);
-    }
-    return -1;
-}
 
 utcpsocket::utcpsocket(size_t buf_size, int sockfd,
     uschedule * sched, bool nonblock, 
@@ -63,6 +23,9 @@ utcpsocket::utcpsocket(size_t buf_size, int sockfd,
     , socket_timeo_(socket_timeo)
     , errno_(0)
     , close_when_destroy_(true)
+    , noblock_(nonblock)
+    , nodelay_(no_delay)
+    
 {
     setnonblock(nonblock);
     setnodelay(no_delay);
@@ -72,6 +35,24 @@ utcpsocket::utcpsocket(size_t buf_size, int sockfd,
     event_.events   = EPOLLIN | EPOLLERR | EPOLLHUP;
     event_.data.ptr = this;
 }
+
+utcpsocket::utcpsocket(size_t buf_size, uschedule * sched, bool nonblock, 
+    int socket_timeo, int connect_timeo, bool no_delay)
+    : utimer()
+    , basic_tcp_stream(buf_size)
+    , schedule_(sched)
+    , socket_fd_(-1)
+    , connect_timeo_(connect_timeo)
+    , socket_timeo_(socket_timeo)
+    , errno_(0)
+    , close_when_destroy_(true)
+    , noblock_(nonblock)
+    , nodelay_(no_delay)
+{
+    event_.events   = EPOLLIN | EPOLLERR | EPOLLHUP;
+    event_.data.ptr = this;
+}
+
 
 utcpsocket::~utcpsocket()
 {
@@ -111,9 +92,9 @@ bool utcpsocket::setnonblock(bool nonblock)
 
     int tmp = fcntl(socket_fd_, F_GETFL, 0);
 
-    if (nonblock && ((tmp & O_NONBLOCK) == 0)) {
+    if (nonblock) {
         ret = fcntl(socket_fd_, F_SETFL, tmp | O_NONBLOCK);
-    } else if (!nonblock && ((tmp & O_NONBLOCK) != 0)) {
+    } else {
         ret = fcntl(socket_fd_, F_SETFL, tmp & (~O_NONBLOCK));
     }
 
@@ -131,3 +112,82 @@ bool utcpsocket::setnodelay(bool nodelay)
 
 }
 
+int utcpsocket::connect(const char * ip, int port)
+{
+    if (ip  == NULL || port == 0) {
+        return -1;
+    }
+
+    uint32_t iip = str2ip(ip);
+    
+    int sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0) {
+        return -2;
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(iip);
+    addr.sin_port   = htons(port);
+
+    new_rdbuf(new utcpstreambuf(this, schedule_, buf_size_));
+
+    if (schedule_->connect(this , (struct sockaddr*) &addr, sizeof(addr)) != 0) {
+        close(sock);
+        return -3;
+    }
+
+    socket_fd_ = sock;
+    setnodelay(noblock_);
+    setnonblock(nodelay_);
+
+    return 0;
+}
+
+
+int utcpsocket::listen(const char * ip, int port, int backlog)
+{
+    if (port == 0) {
+        return -1;
+    }
+
+    uint32_t iip = str2ip(ip);
+    
+    int sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0) {
+        return -2;
+    }
+
+    int opt = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(iip);
+    addr.sin_port   = htons(port);
+
+    if (::bind(sock , (struct sockaddr*) &addr, sizeof(addr)) != 0) {
+        close(sock);
+        return -3;
+    }
+
+    if (::listen(sock, backlog) != 0) {
+        close(sock);
+        return -4;
+    }
+
+    socket_fd_ = sock;
+    setnodelay(noblock_);
+    setnonblock(nodelay_);
+
+    return 0;
+}
+
+int utcpsocket::accept(struct sockaddr* addr, socklen_t* addrlen, int timeo)
+{
+    return schedule_->accept(this, addr, addrlen, timeo);
+}
