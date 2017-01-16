@@ -193,8 +193,8 @@ public:
     
     void run()
     {
-        int fd = utcpsocket::connect("114.55.95.221", url_.port());
-        utcpsocket * socket = new utcpsocket(1024 * 1024, fd, &schedule_);
+        utcpsocket * socket = new utcpsocket(1024 * 1024, &schedule_);
+        socket->connect("114.55.95.221", url_.port());
         uhttp * http = new uhttp(*socket, *this);
     
         //printf("client %d running!\n", fd);
@@ -208,7 +208,6 @@ public:
 
         delete http;
         delete socket;
-        close(fd);
         sleep(10);
 
         schedule_.add_task(new uexit(schedule_));
@@ -216,7 +215,7 @@ public:
         delete this;
     }
     
-    int onhttp(const uhttprequest & request, uhttpresponse & response)
+    int onhttp(const uhttprequest & request, uhttpresponse & response, int)
     {
         return 0;
     }

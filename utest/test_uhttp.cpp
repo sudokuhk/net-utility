@@ -45,7 +45,7 @@ public:
         delete this;
     }
     
-    int onhttp(const uhttprequest & request, uhttpresponse & response)
+    int onhttp(const uhttprequest & request, uhttpresponse & response, int)
     {
         response.set_version(request.version());
         response.set_statuscode(uhttp_status_not_found);
@@ -85,10 +85,8 @@ public:
     
     virtual void run()
     {
-        int l = listen();
-        assert(l >= 0);
-    
         utcpsocket * socket = new utcpsocket(100, socket_fd_, schedule_);
+        socket->listen(host_.c_str(), port_, 100);
         
         running_ = true;
         struct sockaddr_in clientaddr;
@@ -97,7 +95,7 @@ public:
         
         while (running_) {
             clientfd = schedule_->accept(socket, 
-                (struct sockaddr *)&clientaddr, &len);
+                (struct sockaddr *)&clientaddr, &len, -1);
             
             if (clientfd < 0) {
                 printf("accept error, myerrno:%d, errno:%d(%s)\n",
@@ -117,41 +115,6 @@ public:
         delete this;
     }
     
-private:    
-    int listen()
-    {
-        int ret = -1;
-        socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-    
-        int flags = 1;
-        setsockopt(socket_fd_, SOL_SOCKET, SO_REUSEADDR, 
-            (char*) &flags, sizeof(flags));
-    
-        struct sockaddr_in server_sockaddr;
-        server_sockaddr.sin_family  = AF_INET;
-        server_sockaddr.sin_port    = htons(port_);
-        server_sockaddr.sin_addr.s_addr = inet_addr(host_.c_str());
-    
-        if (bind(socket_fd_, (struct sockaddr *)&server_sockaddr,
-            sizeof(server_sockaddr)) == -1) {
-            goto out;
-        }
-        
-        if (::listen(socket_fd_, 1024) == -1) {
-            goto out;
-        }
-    
-        ret = 0;
-        
-        return ret;
-    out:
-        close(socket_fd_);
-        socket_fd_ = -1;
-    
-        return ret;
-    }
-
-
 private:
     uschedule * schedule_;
     int socket_fd_;

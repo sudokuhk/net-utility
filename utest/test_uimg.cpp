@@ -16,16 +16,18 @@
 #include <sys/time.h>
 
 static bool uimg = true;
+static bool chunk = false;
+static std::string host;
+static int port;
 
 class uhttpclient 
     : public utask
     , public uhttphandler
 {
 public:
-    uhttpclient(uschedule * schedule, int fd, bool up, std::string & param)
+    uhttpclient(uschedule * schedule, bool up, std::string & param)
         : utask()
         , schedule_(schedule)
-        , socket_fd_(fd)
         , data(param)
         , upload(up)
     {
@@ -33,11 +35,6 @@ public:
     
     virtual ~uhttpclient()
     {
-        printf("client %3d close!\n", socket_fd_);
-        if (socket_fd_ >= 0) {
-            close(socket_fd_);
-            socket_fd_ = -1;
-        }
     }
 
     void do_upload(uhttp & http)
@@ -107,10 +104,13 @@ public:
     
     virtual void run()
     {
-        utcpsocket * socket = new utcpsocket(1024, socket_fd_, schedule_);
-        uhttp http(*socket, *this, false, true);
+        utcpsocket * socket = new utcpsocket(4096, schedule_);
+        if (socket->connect(host.c_str(), port) < 0) {
+            fprintf(stderr, "connect [%s:%d] failed!\n", host.c_str(), port);
+            exit(0);
+        }
+        uhttp http(*socket, *this, false, chunk);
     
-        printf("client %d running!\n", socket_fd_);
         socket->set_timeout(5 * 1000);
     
         //http->run();
@@ -136,7 +136,7 @@ public:
         printf("%s cost %ld usec!\n", 
             upload ? "upload" : "download",
             cost_time);
-    
+
         delete socket;
         delete this;
     }
@@ -149,7 +149,6 @@ public:
 
 private:
     uschedule * schedule_;
-    int socket_fd_;
     const std::string & data;
     bool upload;
 };
@@ -183,10 +182,10 @@ void readdata(const std::string & file, std::string & content)
 
 int main(int argc, char * argv[])
 {
-    std::string host, file, method, port;
+    std::string file, method;
     
     int ch;
-    while((ch = getopt(argc, argv, "h:p:f:m:s:")) != -1) {
+    while((ch = getopt(argc, argv, "h:p:f:m:s:c")) != -1) {
         switch(ch) {
             case 'h': 
                 host = optarg;
@@ -198,7 +197,10 @@ int main(int argc, char * argv[])
                 method = optarg;
                 break;
             case 'p': 
-                port = optarg;
+                port = atoi(optarg);
+                break;
+            case 'c':
+                chunk = true;
                 break;
             case 's':
                 if (strcmp(optarg, "uimg")) {
@@ -212,8 +214,8 @@ int main(int argc, char * argv[])
     }
 
     int port_ = 8783;
-    if (port.size() > 0) {
-        port_ = atoi(port.c_str());
+    if (port == 0) {
+        port_ = 8783;
     }
 
     if (host.size() == 0) {
@@ -245,13 +247,7 @@ int main(int argc, char * argv[])
     }
     
     uschedule schedule(8 * 1024, 100000, false, NULL);
-    int sock = utcpsocket::connect(host.c_str(), port_);
-    if (sock < 0) {
-        fprintf(stderr, "connect [%s:%d] failed!\n", host.c_str(), port_);
-        exit(0);
-    }
-
-    uhttpclient * client = new uhttpclient(&schedule, sock, method == "upload", data);
+    uhttpclient * client = new uhttpclient(&schedule, method == "upload", data);
     schedule.add_task(client);
     schedule.run();
     

@@ -158,7 +158,7 @@ public:
         
         while (running_) {
             clientfd = schedule_->accept(socket, 
-                (struct sockaddr *)&clientaddr, &len);
+                (struct sockaddr *)&clientaddr, &len, -1);
             
             if (clientfd < 0) {
                 printf("accept error, myerrno:%d, errno:%d(%s)\n",

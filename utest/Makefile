@@ -20,7 +20,7 @@ all : $(OBJECTS)
 	@find .. ! -path "*test*" -name "*.so" -exec cp -f {} . \;
 
 % : %.cpp
-	$(cxx) -O0 -g $(INC_PATH) $(LIB_PATH) $^ -o $@ $(LIBRARY)
+	$(cxx) -O0 -g $(INC_PATH) $(LIB_PATH) $^ -o $@ $(LIBRARY) ../ulog/ulog.cpp
 
 .PHONY : clean
 
