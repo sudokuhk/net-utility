@@ -134,14 +134,15 @@ int utcpsocket::connect(const char * ip, int port)
 
     new_rdbuf(new utcpstreambuf(this, schedule_, buf_size_));
 
-    if (schedule_->connect(this , (struct sockaddr*) &addr, sizeof(addr)) != 0) {
-        close(sock);
-        return -3;
-    }
-
     socket_fd_ = sock;
     setnodelay(noblock_);
     setnonblock(nodelay_);
+    
+    if (schedule_->connect(this , (struct sockaddr*) &addr, sizeof(addr)) != 0) {
+        socket_fd_ = -1;
+        close(sock);
+        return -3;
+    }
 
     return 0;
 }

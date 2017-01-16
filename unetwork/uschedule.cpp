@@ -301,7 +301,9 @@ int uschedule::connect(utcpsocket * socket, struct sockaddr * addr,
     ret = ::connect(socket->socket(), addr, addrlen);
     if (ret < 0) {
         if (EAGAIN == errno || EINPROGRESS == errno) {
-            if (poll(socket, EPOLLIN, socket->connect_timeo()) > 0) {
+            ret = poll(socket, EPOLLIN, socket->connect_timeo());
+            printf("2 ret = %d\n", ret);
+            if (ret > 0) {
                 ret = 0;
             }
         }
