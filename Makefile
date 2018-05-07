@@ -5,7 +5,7 @@
 MAKE=make
 
 dirs:=	\
-	uhttp	\
+	uhttp \
 	unetwork	\
 	uthread	\
 	utools	\

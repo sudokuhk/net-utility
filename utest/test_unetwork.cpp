@@ -93,11 +93,11 @@ public:
             //printf("recv:%d\n", len);
             
             if (!socket->read((char *)&buf_[0], len).good()) {
-                //printf("recv negative! break!\n");
+                printf("recv negative! break!\n");
                 break;
             }
             
-            //printf("recv:%d, %s\n", len, (char *)&buf_[0]);
+            printf("recv:%d, %s\n", len, (char *)&buf_[0]);
             
             //schedule_->send(socket, (void *)&buf_[0], ret, 0);
             //socket->write((char *)&buf_[0], len);
